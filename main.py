@@ -9,8 +9,8 @@ import random
 import datetime
 
 #TODO
-#calc_attributes
-#add_quest
+#FAILS if no data
+#delete quest -- just closes it -- does not delete or lose old completes
 #Create attribute history calc incl. config item: last update
 #Quest ADD and DISPLAY
 #Can I get rid of attributes_o?
@@ -107,25 +107,15 @@ def save_config():
           file.write(k + ":" + v + "\n")
      file.close()
 
-def load_char():
-     print PENDING
-
-def save_char():
-     print PENDING
-
-def update_attr():
-     print PENDING
-
 def display_attr():
      i=0
      for k in attributes_o:
           box_attr.addstr(2+i, 2, k, curses.A_BOLD)
           box_attr.addstr(2+i, 2 + 3, " - ")
-          box_attr.addstr(2+i, 2 + 6, str(attributes[k][1]))
+          box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][len(attributes[k])-1])))
           for j in range(0,20):
-               if int(attributes[k][1]/5)>j:
+               if int(attributes[k][len(attributes[k])-1]/5)>j:
                     screen.addstr(origin_attr[1]+i, origin_attr[0] + 9 + j, u'\u25AA'.encode('utf-8'))
-                    pass
           i+=2
 
 def display_menu():
@@ -192,7 +182,7 @@ def load_db():
                          VALUES
                          (?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
                          """
-                    str_date = str(random.randint(8,12))+"/"+str(random.randint(1,30))+"/2013"
+                    str_date = str(random.randint(11,12))+"-"+str(random.randint(1,30))+"-2013"
                     if random.randint(0,6)<3:
                          status_str = 'open'
                     elif random.randint(0,2) == 1:
@@ -203,7 +193,7 @@ def load_db():
                          style_str = 'decay'
                     else:
                          style_str = 'fixed'
-                    data =  ['test'+str(i), datetime.datetime.strptime(str_date, '%m/%d/%Y').date().isoformat(),style_str,status_str,'test',random.randint(0,20),random.randint(0,20),random.randint(0,20),random.randint(0,20),random.randint(0,20),random.randint(0,20),random.randint(0,20)]
+                    data =  ['test'+str(i), datetime.datetime.strptime(str_date, '%m-%d-%Y').date().isoformat(),style_str,status_str,'test',random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10)]
                     cur.execute(query, data)       
 
           con.commit() 
@@ -220,7 +210,112 @@ def load_db():
                con.close()
 
 def add_quest():
-     print PENDING
+     val_array = [0,0,0,0,0,0,0]
+
+     attempt = 1
+     while attempt == 1:
+          screen.clear()
+          screen.border(0)
+          screen.addstr(2, 2, "What is the quest?")
+          screen.refresh()
+          name_str = screen.getstr(10, 10, 60)
+          if len(name_str)>0:
+               attempt = 0
+
+     attempt = 1
+     menu_step = 0
+     while attempt == 1:
+          screen.clear()
+          screen.border(0)
+          screen.addstr(2, 2, "Is this a persistent quest?")
+          screen.addstr(4, 3, "Persistent")
+          screen.addstr(6, 3, "One-time")
+          screen.addstr(4+menu_step%2*2, 2, u'\u2588'.encode('utf-8'))
+
+          screen.refresh()
+
+          cmd = screen.getch()
+
+          if cmd == curses.KEY_DOWN or cmd == curses.KEY_UP:
+               menu_step+=1
+          elif cmd == ord('\n'):
+               if menu_step%2 == 0:
+                    status_str = 'persistent'
+               else:
+                    status_str = 'open'
+               attempt = 0
+
+     attempt = 1
+     menu_step = 0
+     while attempt == 1:
+          screen.clear()
+          screen.border(0)
+          screen.addstr(2, 2, "Will this quest reward decay?")
+          screen.addstr(4, 3, "Decay")
+          screen.addstr(6, 3, "Static")
+          screen.addstr(4+menu_step%2*2, 2, u'\u2588'.encode('utf-8'))
+
+          screen.refresh()
+
+          cmd = screen.getch()
+
+          if cmd == curses.KEY_DOWN or cmd == curses.KEY_UP:
+               menu_step+=1
+          elif cmd == ord('\n'):
+               if menu_step%2 == 0:
+                    style_str = 'decay'
+               else:
+                    style_str = 'fixed'
+               attempt = 0
+
+     attempt = 1
+     menu_step = 0
+     while attempt == 1:
+          screen.clear()
+          screen.border(0)
+          screen.addstr(2, 2, "Configure attribute rewards")
+
+          attributes_sorted = attributes_o
+          attributes_sorted.sort()
+
+          for i in range (0,7):
+               screen.addstr(4, 4+i*8, attributes_sorted[i])
+               screen.addstr(6, 4+i*8, str(val_array[i]))
+          screen.addstr(4, 3+menu_step*8, u'\u2588'.encode('utf-8'))
+          screen.refresh()
+
+          cmd = screen.getch()
+
+          if cmd == curses.KEY_DOWN and val_array[menu_step] > 0:
+               val_array[menu_step]-=1
+          elif cmd == curses.KEY_UP:
+               val_array[menu_step]+=1
+          elif cmd == curses.KEY_RIGHT and menu_step < 7:
+               menu_step += 1
+          elif cmd == curses.KEY_LEFT and menu_step > 0:
+               menu_step -= 1
+          elif cmd == ord('\n'):
+               attempt = 0     
+
+     con = None
+
+     try:
+          con = sqlite3.connect('char.db')
+          cur = con.cursor()
+
+          query = """INSERT INTO quests
+               (name, date_created, style, status, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
+               VALUES
+               (?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
+               """
+          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
+          cur.execute(query, data)       
+          con.commit()               
+     except sqlite3.Error, e:
+          screen.addstr(origin_error[1], origin_error[0], "--Error adding quest to database--")
+     finally:
+          if con:
+               con.close()
 
 def log_quest(rowid):
      con = None
@@ -247,13 +342,23 @@ def log_quest(rowid):
      finally:
           if con:
                con.close()
+          calc_attributes()
      #Add entry to table completed
 
      #CLOSE if status = 'open'
 
 def calc_attributes():
      con = None
-     hist = []
+     impact_array = []
+     attr_hist = [[],[],[],[],[],[],[]]
+
+     attributes['CHA'] = []
+     attributes['DEX'] = []
+     attributes['INT'] = []
+     attributes['STR'] = []
+     attributes['VIT'] = []
+     attributes['WIS'] = []
+     attributes['WLL'] = []
 
      #FOR EACH DATE IN LAST 100
           #FOR EACH DECAY COMPLETE -- AGGREGATE IMPACT UNTIL < 1 (LINEAR DECAY 1 MONTH)
@@ -262,18 +367,49 @@ def calc_attributes():
           con = sqlite3.connect('char.db')
           cur = con.cursor()
 
-          for i in range(0, 100)
-               hist[i] = 0
-               cur.execute("SELECT * FROM completes WHERE style = 'decay'")
+          for i in range(0, 73):
+               for j in range (0, 7):
+                   attr_hist[j].append(0)            
+               cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'decay'")
                con.commit()
                c_rows = cur.fetchall()
                for c_row in c_rows:
-                    query = """SELECT * FROM quests WHERE rowid = ?"""
-                    data = [c_rows[0]]
-                    cur.execute(query,data)
-                    q_row = cur.fetchone()
-                    
+                    decay_scaler = 0
+                    #IF COMPLETE TOOK PLACE ON OR BEFORE DAY IN QUESTION AND < 30 DAYS AGO
+                    days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
+                    if (days_since >= i) and (days_since - i < decay_days):
+                         decay_scaler = float(days_since-i)/float(decay_days)
+                         query = """SELECT * FROM quests WHERE rowid = ?"""
+                         data = [c_row[0]]
+                         cur.execute(query,data)
+                         q_row = cur.fetchone()
+                         for j in range (0, 7):
+                              attr_hist[j][i] += (float(q_row[5+j])*decay_scaler)
 
+               #ADD FIXED
+               cur.execute("SELECT quest_id, max(date_completed) FROM completes GROUP BY quest_id")
+               cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'decay'")
+               con.commit()
+               c_rows = cur.fetchall()
+               for c_row in c_rows:
+                    days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
+                    if (days_since >= i) and (days_since - i < decay_days):
+                         query = """SELECT * FROM quests WHERE rowid = ?"""
+                         data = [c_row[0]]
+                         cur.execute(query,data)
+                         q_row = cur.fetchone()
+                         for j in range (0, 7):
+                              attr_hist[j][i] += (float(q_row[5+j])*decay_scaler)
+
+               attributes['CHA'].append(min(attr_hist[0][i],99))
+               attributes['DEX'].append(min(attr_hist[1][i],99))
+               attributes['INT'].append(min(attr_hist[2][i],99))
+               attributes['STR'].append(min(attr_hist[3][i],99))
+               attributes['VIT'].append(min(attr_hist[4][i],99))
+               attributes['WIS'].append(min(attr_hist[5][i],99))
+               attributes['WLL'].append(min(attr_hist[6][i],99))
+
+          config['last_calc'] = str(datetime.datetime.today().date().isoformat())
 
      except sqlite3.Error, e:
           screen.addstr(origin_error[1], origin_error[0], "--Error loading database--")
@@ -281,12 +417,12 @@ def calc_attributes():
           if con:
                con.close()
 
-#GLOBAL VARIABLES
+#SYSTEM VARIABLES
 config = {}
-attributes = {'INT': [11,10,13], 'VIT': [12,10], 'STR': [13,11], 'WIS': [25,23], 'WLL': [15,21], 'DEX': [30,40], 'CHA': [15,17]}
+attributes = {'INT': [], 'VIT': [], 'STR': [], 'WIS': [], 'WLL': [], 'DEX': [], 'CHA': []}
 attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
-menu = ["QUESTS", "SKILLS", "ATTRIBUTES", "SETTINGS", "SAVE & EXIT", "EXIT"]
+menu = ["ADD QUEST", "LOG QUEST", "ATTRIBUTES", "SETTINGS", "SAVE & EXIT", "EXIT"]
 origin_attr = [5, 35]
 origin_portrait = [10, 3]
 origin_menu = [5, 52]
@@ -295,8 +431,11 @@ origin_quests = [38, 5]
 origin_error = [3, 3]
 dimensions_chart = [80, 32]
 
+#CONFIG
 ADD_TEST_DATA = 1
+decay_days = 30
 
+#OPERATING VARS
 x=0
 run = 1
 current_menu = 0
@@ -309,10 +448,9 @@ screen.keypad(1)
 
 load_config()
 load_db()
-#load_char()
-#save_char()
+if (datetime.datetime.today()-datetime.datetime.strptime(config['last_calc'], "%Y-%m-%d" )).days > 0:
+     calc_attributes()
 
-#MAIN LOOP
 while run == 1:
      screen.clear()
      screen.border(0)
@@ -334,7 +472,7 @@ while run == 1:
      display_chart()
      box_chart.refresh()
 
-     #ascii_char()
+     ascii_char()
      display_quest_status()
 
      cmd = screen.getch()
@@ -348,12 +486,11 @@ while run == 1:
           if current_chart == len(attributes_o)-1: current_chart = 0
           else: current_chart+=1
      elif cmd == ord('\n'):
+          if menu[current_menu] == "ADD QUEST": add_quest()
           if menu[current_menu] == "LOG QUEST": pass
           elif menu[current_menu] == "EXIT": run = 0
      if cmd == ord('x'): run = 0
-     #username = get_param("Enter the username")
 
-#save_char()
 save_config()
 screen.keypad(0)
 curses.endwin()

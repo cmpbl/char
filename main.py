@@ -8,20 +8,6 @@ import sys
 import random
 import datetime
 
-#TODO
-#FAILS if no data
-#delete quest -- just closes it -- does not delete or lose old completes
-#Create attribute history calc incl. config item: last update
-#Quest ADD and DISPLAY
-#Can I get rid of attributes_o?
-#Functionality for negative events (e.g., over-weight)
-#Fix scaling on level chart if using
-#Add check on Log_Quest() that quest is 'open'
-#Add type - fixed for non-decay e.g., weight
-
-#REMEMBER
-#datetime.datetime.now().date().isoformat()
-
 locale.setlocale(locale.LC_ALL, '')
 
 def get_param(prompt_string):
@@ -124,7 +110,7 @@ def display_menu():
           box_menu.addstr(2+i*2, 4, menu[i], curses.A_BOLD)
           i+=1
      if current_menu<=5:
-          box_menu.addstr(2+current_menu*2, 2, u'\u2588'.encode('utf-8'))
+          box_menu.addstr(2+current_menu*2, 2, u'\u25BA'.encode('utf-8'))
 
 def display_chart():
      i=0
@@ -160,7 +146,7 @@ def display_chart():
           box_chart.addstr(dimensions_chart[1]-3, 3+i, u'\u2500'.encode('utf-8'))
 
 def display_quest_status():
-     screen.addstr(origin_quests[1], origin_quests[0], "ACTIVE QUESTS", curses.A_BOLD)
+     screen.addstr(origin_quests[1], origin_quests[0], "ACTIVE", curses.A_BOLD)
 
 def load_db():
      con = None
@@ -172,15 +158,15 @@ def load_db():
 
           cur.execute("DROP TABLE IF EXISTS quests")
           cur.execute("DROP TABLE IF EXISTS completes")
-          cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT)")
+          cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, icon TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT)")
           cur.execute("CREATE TABLE completes(quest_id INT, date_completed TEXT)")
 
           if ADD_TEST_DATA:
                for i in range(0,499):
                     query = """INSERT INTO quests
-                         (name, date_created, style, status, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
+                         (name, date_created, style, status, icon, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
                          VALUES
-                         (?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
+                         (?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
                          """
                     str_date = str(random.randint(11,12))+"-"+str(random.randint(1,30))+"-2013"
                     if random.randint(0,6)<3:
@@ -189,11 +175,11 @@ def load_db():
                          status_str = 'persistent'
                     else:
                          status_str = 'closed'
-                    if random.randint(1,4)<3:
+                    if random.randint(1,100)>3:
                          style_str = 'decay'
                     else:
                          style_str = 'fixed'
-                    data =  ['test'+str(i), datetime.datetime.strptime(str_date, '%m-%d-%Y').date().isoformat(),style_str,status_str,'test',random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10)]
+                    data =  ['test'+str(i), datetime.datetime.strptime(str_date, '%m-%d-%Y').date().isoformat(),style_str,status_str,"u'\u266B'",'test',random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10)]
                     cur.execute(query, data)       
 
           con.commit() 
@@ -202,6 +188,7 @@ def load_db():
                for i in range(1,100):
                     log_quest(random.randint(1,499)) 
                con.commit                  
+               calc_attributes()
          
      except sqlite3.Error, e:
           screen.addstr(origin_error[1], origin_error[0], "--Error loading database--")
@@ -304,11 +291,11 @@ def add_quest():
           cur = con.cursor()
 
           query = """INSERT INTO quests
-               (name, date_created, style, status, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
+               (name, date_created, style, status, icon, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
                VALUES
-               (?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
+               (?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
                """
-          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
+          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,'\u266B','',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
           cur.execute(query, data)       
           con.commit()               
      except sqlite3.Error, e:
@@ -339,17 +326,46 @@ def log_quest(rowid):
           con.commit()
      except sqlite3.Error, e:
           screen.addstr(origin_error[1], origin_error[0], "--Error loading database--")
-     finally:
+     finally: 
           if con:
                con.close()
-          calc_attributes()
+          if not ADD_TEST_DATA:
+               calc_attributes()
      #Add entry to table completed
 
      #CLOSE if status = 'open'
 
+def display_buffs():
+     box_buffs.addstr(2,2, "BUFFS")
+     box_buffs.addstr(6,2, "DEBUFFS")
+
+     i = 0
+     i_row = 0
+     for buff in buffs:
+          if i > 8:
+                i_row = 1
+          buff_cmd = "box_buffs.addstr(2+i_row*2,11+2*i-i_row*18, "+buff+".encode('utf-8'))"
+          exec buff_cmd
+          if i > 14:
+               break
+          i+=1
+
+     i = 0
+     i_row = 0
+     for buff in debuffs:
+          if i > 8:
+                i_row = 1
+          buff_cmd = "box_buffs.addstr(6+i_row*2,11+2*i-i_row*18, "+buff+".encode('utf-8'))"
+          exec buff_cmd
+          if i > 14:
+               break
+          i+=1
+
 def calc_attributes():
      con = None
      impact_array = []
+     #buffs = []
+     debuffs = []
      attr_hist = [[],[],[],[],[],[],[]]
 
      attributes['CHA'] = []
@@ -384,22 +400,32 @@ def calc_attributes():
                          cur.execute(query,data)
                          q_row = cur.fetchone()
                          for j in range (0, 7):
-                              attr_hist[j][i] += (float(q_row[5+j])*decay_scaler)
+                              attr_hist[j][i] += (float(q_row[6+j])*decay_scaler)
 
                #ADD FIXED
                cur.execute("SELECT quest_id, max(date_completed) FROM completes GROUP BY quest_id")
-               cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'decay'")
+               cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'fixed'")
                con.commit()
                c_rows = cur.fetchall()
                for c_row in c_rows:
+                    buff_active = 0
+                    debuff_active = 0
                     days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
-                    if (days_since >= i) and (days_since - i < decay_days):
+                    if days_since >= i:
                          query = """SELECT * FROM quests WHERE rowid = ?"""
                          data = [c_row[0]]
                          cur.execute(query,data)
                          q_row = cur.fetchone()
                          for j in range (0, 7):
-                              attr_hist[j][i] += (float(q_row[5+j])*decay_scaler)
+                              attr_hist[j][i] += float(q_row[6+j])
+                              if q_row[6+j] > 0:
+                                   buff_active = 1
+                              if q_row[6+j] < 0:
+                                   debuff_active = 1
+                         if buff_active:
+                              buffs.append(q_row[4])
+                         if debuff_active:
+                              debuffs.append(q_row[4])
 
                attributes['CHA'].append(min(attr_hist[0][i],99))
                attributes['DEX'].append(min(attr_hist[1][i],99))
@@ -422,14 +448,17 @@ config = {}
 attributes = {'INT': [], 'VIT': [], 'STR': [], 'WIS': [], 'WLL': [], 'DEX': [], 'CHA': []}
 attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
+buffs = []
+debuffs = []
 menu = ["ADD QUEST", "LOG QUEST", "ATTRIBUTES", "SETTINGS", "SAVE & EXIT", "EXIT"]
-origin_attr = [5, 35]
+origin_attr = [5, 46]
 origin_portrait = [10, 3]
-origin_menu = [5, 52]
+origin_menu = [5, 63]
 origin_chart = [38, 35]
 origin_quests = [38, 5]
 origin_error = [3, 3]
-dimensions_chart = [80, 32]
+origin_buffs = [5, 35]
+dimensions_chart = [80, 43]
 
 #CONFIG
 ADD_TEST_DATA = 1
@@ -460,8 +489,13 @@ while run == 1:
      box_menu.box()
      box_chart = curses.newwin(dimensions_chart[1], dimensions_chart[0], origin_chart[1]-2, origin_chart[0]-2)
      box_chart.box()
+     box_buffs = curses.newwin(11, 32, origin_buffs[1]-2, origin_buffs[0]-2)
+     box_buffs.box()
   
      screen.refresh()
+
+     display_buffs()
+     box_buffs.refresh()
 
      display_attr()
      box_attr.refresh()

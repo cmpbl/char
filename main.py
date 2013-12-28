@@ -98,18 +98,21 @@ def display_attr():
      for k in attributes_o:
           box_attr.addstr(2+i, 2, k, curses.A_BOLD)
           box_attr.addstr(2+i, 2 + 3, " - ")
-          box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][len(attributes[k])-1])))
-          for j in range(0,20):
-               if int(attributes[k][len(attributes[k])-1]/5)>j:
-                    screen.addstr(origin_attr[1]+i, origin_attr[0] + 9 + j, u'\u25AA'.encode('utf-8'))
+          if len(attributes[k]) > 0:
+               box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][len(attributes[k])-1])))
+               for j in range(0,20):
+                    if int(attributes[k][len(attributes[k])-1]/5)>j:
+                         screen.addstr(origin_attr[1]+i, origin_attr[0] + 9 + j, u'\u25AA'.encode('utf-8'))
+          else:
+               box_attr.addstr(2+i, 2 + 6, "0")
           i+=2
 
 def display_menu():
      i=0
-     for menu_item in menu:
-          box_menu.addstr(2+i*2, 4, menu[i], curses.A_BOLD)
+     for menu_item in menu_tree[menu_level]:
+          box_menu.addstr(2+i*2, 4, menu_tree[menu_level][i], curses.A_BOLD)
           i+=1
-     if current_menu<=5:
+     if current_menu<=len(menu_tree[menu_level]):
           box_menu.addstr(2+current_menu*2, 2, u'\u25BA'.encode('utf-8'))
 
 def display_chart():
@@ -196,71 +199,88 @@ def load_db():
           if con:
                con.close()
 
-def add_quest():
+def add_quest(quest_type):
      val_array = [0,0,0,0,0,0,0]
+
+     if quest_type == 'quest':
+          style_str = 'decay'
+          icon_str = "u'\u2588'"
+     else:
+          status_str = 'persistent'
+          style_str = 'fixed'
 
      attempt = 1
      while attempt == 1:
           screen.clear()
           screen.border(0)
-          screen.addstr(2, 2, "What is the quest?")
+          if quest_type == 'quest':
+               screen.addstr(2, 2, "What is the quest?")
+          else:
+               screen.addstr(2,2, "What is this buff or debuff?")
           screen.refresh()
           name_str = screen.getstr(10, 10, 60)
           if len(name_str)>0:
                attempt = 0
 
+     if quest_type == 'quest':
+          attempt = 1
+          menu_step = 0
+          while attempt == 1:
+               screen.clear()
+               screen.border(0)
+               screen.addstr(2, 2, "Is this a persistent quest?")
+               screen.addstr(4, 4, "Persistent")
+               screen.addstr(6, 4, "One-time")
+               screen.addstr(4+menu_step%2*2, 2, u'\u25BA'.encode('utf-8'))
+               screen.addstr(1, 1, '')
+
+               screen.refresh()
+
+               cmd = screen.getch()
+
+               if cmd == curses.KEY_DOWN or cmd == curses.KEY_UP:
+                    menu_step+=1
+               elif cmd == ord('\n'):
+                    if menu_step%2 == 0:
+                         status_str = 'persistent'
+                    else:
+                         status_str = 'open'
+                    attempt = 0
+
+     if quest_type == 'buff':
+          attempt = 1
+          menu_step = 0
+          while attempt == 1:
+               screen.clear()
+               screen.border(0)
+               screen.addstr(2, 2, "Choose an icon for this buff or debuff")
+               j = 0
+               for icon in icon_list:
+                    buff_cmd = "screen.addstr(4+j%8*2, 4+(j/8)*10, "+icon+".encode('utf-8'))"
+                    exec buff_cmd
+                    j+=1
+               screen.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
+
+               screen.addstr(1, 1, '')
+
+               screen.refresh()
+
+               cmd = screen.getch()
+
+               if cmd == curses.KEY_DOWN and menu_step < len(icon_list):
+                    menu_step+=1
+               elif cmd == curses.KEY_UP and menu_step > 0:
+                    menu_step-=1
+               elif cmd == ord('\n'):
+                    icon_str = icon_list[menu_step]
+                    attempt = 0
+
      attempt = 1
      menu_step = 0
      while attempt == 1:
           screen.clear()
           screen.border(0)
-          screen.addstr(2, 2, "Is this a persistent quest?")
-          screen.addstr(4, 3, "Persistent")
-          screen.addstr(6, 3, "One-time")
-          screen.addstr(4+menu_step%2*2, 2, u'\u2588'.encode('utf-8'))
-
-          screen.refresh()
-
-          cmd = screen.getch()
-
-          if cmd == curses.KEY_DOWN or cmd == curses.KEY_UP:
-               menu_step+=1
-          elif cmd == ord('\n'):
-               if menu_step%2 == 0:
-                    status_str = 'persistent'
-               else:
-                    status_str = 'open'
-               attempt = 0
-
-     attempt = 1
-     menu_step = 0
-     while attempt == 1:
-          screen.clear()
-          screen.border(0)
-          screen.addstr(2, 2, "Will this quest reward decay?")
-          screen.addstr(4, 3, "Decay")
-          screen.addstr(6, 3, "Static")
-          screen.addstr(4+menu_step%2*2, 2, u'\u2588'.encode('utf-8'))
-
-          screen.refresh()
-
-          cmd = screen.getch()
-
-          if cmd == curses.KEY_DOWN or cmd == curses.KEY_UP:
-               menu_step+=1
-          elif cmd == ord('\n'):
-               if menu_step%2 == 0:
-                    style_str = 'decay'
-               else:
-                    style_str = 'fixed'
-               attempt = 0
-
-     attempt = 1
-     menu_step = 0
-     while attempt == 1:
-          screen.clear()
-          screen.border(0)
-          screen.addstr(2, 2, "Configure attribute rewards")
+          screen.addstr(2, 2, "Configure attribute impact")
 
           attributes_sorted = attributes_o
           attributes_sorted.sort()
@@ -273,7 +293,9 @@ def add_quest():
 
           cmd = screen.getch()
 
-          if cmd == curses.KEY_DOWN and val_array[menu_step] > 0:
+          if cmd == curses.KEY_DOWN and val_array[menu_step] > 0 and quest_type == 'quest':
+               val_array[menu_step]-=1
+          elif cmd == curses.KEY_DOWN:
                val_array[menu_step]-=1
           elif cmd == curses.KEY_UP:
                val_array[menu_step]+=1
@@ -282,7 +304,7 @@ def add_quest():
           elif cmd == curses.KEY_LEFT and menu_step > 0:
                menu_step -= 1
           elif cmd == ord('\n'):
-               attempt = 0     
+               attempt = 0
 
      con = None
 
@@ -295,7 +317,7 @@ def add_quest():
                VALUES
                (?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
                """
-          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,'\u266B','',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
+          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,icon_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
           cur.execute(query, data)       
           con.commit()               
      except sqlite3.Error, e:
@@ -304,14 +326,52 @@ def add_quest():
           if con:
                con.close()
 
-def log_quest(rowid):
+def log_quest(quest_type):
+
+     #FIND rowid
      con = None
 
      try:
           con = sqlite3.connect('char.db')
           cur = con.cursor()
+          query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
+          cur.execute(query)
+          con.commit()
+
+          c_rows = cur.fetchall()
+
+          attempt = 1
+          menu_step = 0
+          while attempt == 1:
+               screen.clear()
+               screen.border(0)
+
+               screen.addstr(2, 2, "Which buff should be activated?")
+
+               i = 0
+               for c_row in c_rows:
+                    buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
+                    exec buff_cmd
+                    screen.addstr(4+i*2, 6, c_row[1])
+                    i+=1
+
+               screen.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
+               screen.addstr(1, 1, '')
+               screen.refresh()
+
+               cmd = screen.getch()
+
+               if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1:
+                    menu_step+=1
+               elif cmd == curses.KEY_UP and menu_step > 0:
+                    menu_step-=1
+               elif cmd == ord('\n'):
+                    rowid = c_rows[menu_step][0]
+                    attempt = 0
+
+          #query = """UPDATE quests SET status = 'closed' WHERE rowid = ?"""
           query = """UPDATE quests SET status = 'closed' WHERE rowid = ? AND status = 'open'"""
-          data = [rowid]
+          data = [int(rowid)]
           cur.execute(query,data)
           con.commit()
 
@@ -320,8 +380,7 @@ def log_quest(rowid):
                VALUES
                (?, ?)
                """
-          str_date = str(random.randint(8,12))+"/"+str(random.randint(1,30))+"/2013"
-          data =  [rowid, datetime.datetime.strptime(str_date, '%m/%d/%Y').date().isoformat()]
+          data =  [int(rowid), datetime.datetime.today().date().isoformat()]
           cur.execute(query, data)
           con.commit()
      except sqlite3.Error, e:
@@ -331,9 +390,6 @@ def log_quest(rowid):
                con.close()
           if not ADD_TEST_DATA:
                calc_attributes()
-     #Add entry to table completed
-
-     #CLOSE if status = 'open'
 
 def display_buffs():
      box_buffs.addstr(2,2, "BUFFS")
@@ -341,6 +397,7 @@ def display_buffs():
 
      i = 0
      i_row = 0
+     box_buffs.addstr(8, 4, str(len(buffs))) 
      for buff in buffs:
           if i > 8:
                 i_row = 1
@@ -364,7 +421,7 @@ def display_buffs():
 def calc_attributes():
      con = None
      impact_array = []
-     #buffs = []
+     buffs = []
      debuffs = []
      attr_hist = [[],[],[],[],[],[],[]]
 
@@ -422,7 +479,7 @@ def calc_attributes():
                                    buff_active = 1
                               if q_row[6+j] < 0:
                                    debuff_active = 1
-                         if buff_active:
+                         if buff_active: 
                               buffs.append(q_row[4])
                          if debuff_active:
                               debuffs.append(q_row[4])
@@ -450,7 +507,10 @@ attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
 buffs = []
 debuffs = []
-menu = ["ADD QUEST", "LOG QUEST", "ATTRIBUTES", "SETTINGS", "SAVE & EXIT", "EXIT"]
+menu_tree = {'top':["QUESTS", "BUFFS", "SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "REMOVE BUFF", "MAIN MENU"]}
+
+icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2691'" ,"u'\u2693'", "u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2615'", "u'\u2646'"]
+
 origin_attr = [5, 46]
 origin_portrait = [10, 3]
 origin_menu = [5, 63]
@@ -461,12 +521,14 @@ origin_buffs = [5, 35]
 dimensions_chart = [80, 43]
 
 #CONFIG
-ADD_TEST_DATA = 1
+ADD_TEST_DATA = 0
+DEBUGGING = 1
 decay_days = 30
 
 #OPERATING VARS
 x=0
 run = 1
+menu_level = 'top'
 current_menu = 0
 current_chart = 0
 
@@ -481,6 +543,9 @@ if (datetime.datetime.today()-datetime.datetime.strptime(config['last_calc'], "%
      calc_attributes()
 
 while run == 1:
+     #if DEBUGGING:
+     #     calc_attributes()
+
      screen.clear()
      screen.border(0)
      box_attr = curses.newwin(17, 32, origin_attr[1]-2, origin_attr[0]-2)
@@ -511,7 +576,7 @@ while run == 1:
 
      cmd = screen.getch()
 
-     if cmd == curses.KEY_DOWN and current_menu < len(menu)-1: current_menu+=1
+     if cmd == curses.KEY_DOWN and current_menu < len(menu_tree[menu_level])-1: current_menu+=1
      elif cmd == curses.KEY_UP and current_menu > 0: current_menu-=1
      elif cmd == curses.KEY_LEFT:
           if current_chart == 0: current_chart = len(attributes_o)-1
@@ -520,9 +585,32 @@ while run == 1:
           if current_chart == len(attributes_o)-1: current_chart = 0
           else: current_chart+=1
      elif cmd == ord('\n'):
-          if menu[current_menu] == "ADD QUEST": add_quest()
-          if menu[current_menu] == "LOG QUEST": pass
-          elif menu[current_menu] == "EXIT": run = 0
+          if menu_tree[menu_level][current_menu] == "QUESTS":
+               menu_level = 'quests'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "BUFFS":
+               menu_level = 'buffs'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "MAIN MENU":
+               menu_level = 'top'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "ADD QUEST":
+               add_quest('quest')
+               menu_level = 'top'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "ADD BUFF":
+               add_quest('buff')
+               menu_level = 'top'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "ACTIVATE BUFF":
+               log_quest('buff')
+               menu_level = 'top'
+               current_menu = 0 
+          elif menu_tree[menu_level][current_menu] == "LOG QUEST":
+               log_quest('quest')
+               menu_level = 'top'
+               current_menu = 0               
+          elif menu_tree[menu_level][current_menu] == "EXIT": run = 0
      if cmd == ord('x'): run = 0
 
 save_config()

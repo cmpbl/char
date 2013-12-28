@@ -178,10 +178,7 @@ def load_db():
                          status_str = 'persistent'
                     else:
                          status_str = 'closed'
-                    if random.randint(1,100)>3:
-                         style_str = 'decay'
-                    else:
-                         style_str = 'fixed'
+                    style_str = 'decay'
                     data =  ['test'+str(i), datetime.datetime.strptime(str_date, '%m-%d-%Y').date().isoformat(),style_str,status_str,"u'\u266B'",'test',random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10),random.randint(0,10)]
                     cur.execute(query, data)       
 
@@ -189,7 +186,7 @@ def load_db():
 
           if ADD_TEST_DATA:
                for i in range(1,100):
-                    log_quest(random.randint(1,499)) 
+                    log_quest('quest',random.randint(1,499)) 
                con.commit                  
                calc_attributes()
          
@@ -326,50 +323,54 @@ def add_quest(quest_type):
           if con:
                con.close()
 
-def log_quest(quest_type):
+def log_quest(quest_type, rowid):
 
-     #FIND rowid
+     if rowid >= 0:
+          is_test_data = 1
+     else: 
+          is_test_data = 0
+
      con = None
 
      try:
           con = sqlite3.connect('char.db')
           cur = con.cursor()
-          query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
-          cur.execute(query)
-          con.commit()
+          if rowid < 0:
+               query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
+               cur.execute(query)
+               con.commit()
 
-          c_rows = cur.fetchall()
+               c_rows = cur.fetchall()
 
-          attempt = 1
-          menu_step = 0
-          while attempt == 1:
-               screen.clear()
-               screen.border(0)
+               attempt = 1
+               menu_step = 0
+               while attempt == 1:
+                    screen.clear()
+                    screen.border(0)
 
-               screen.addstr(2, 2, "Which buff should be activated?")
+                    screen.addstr(2, 2, "Which buff should be activated?")
 
-               i = 0
-               for c_row in c_rows:
-                    buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
-                    exec buff_cmd
-                    screen.addstr(4+i*2, 6, c_row[1])
-                    i+=1
+                    i = 0
+                    for c_row in c_rows:
+                         buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
+                         exec buff_cmd
+                         screen.addstr(4+i*2, 6, c_row[1])
+                         i+=1
 
-               screen.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
-               screen.addstr(1, 1, '')
-               screen.refresh()
+                    screen.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
+                    screen.addstr(1, 1, '')
+                    screen.refresh()
 
-               cmd = screen.getch()
+                    cmd = screen.getch()
 
-               if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1:
-                    menu_step+=1
-               elif cmd == curses.KEY_UP and menu_step > 0:
-                    menu_step-=1
-               elif cmd == ord('\n'):
-                    rowid = c_rows[menu_step][0]
-                    attempt = 0
+                    if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1:
+                         menu_step+=1
+                    elif cmd == curses.KEY_UP and menu_step > 0:
+                         menu_step-=1
+                    elif cmd == ord('\n'):
+                         rowid = c_rows[menu_step][0]
+                         attempt = 0
 
-          #query = """UPDATE quests SET status = 'closed' WHERE rowid = ?"""
           query = """UPDATE quests SET status = 'closed' WHERE rowid = ? AND status = 'open'"""
           data = [int(rowid)]
           cur.execute(query,data)
@@ -380,7 +381,11 @@ def log_quest(quest_type):
                VALUES
                (?, ?)
                """
-          data =  [int(rowid), datetime.datetime.today().date().isoformat()]
+          if is_test_data:
+               str_date = str(random.randint(8,12))+"/"+str(random.randint(1,30))+"/2013"
+               act_date = datetime.datetime.strptime(str_date, '%m/%d/%Y').date().isoformat()
+          else: act_date = datetime.datetime.today().date().isoformat()
+          data =  [int(rowid), act_date]
           cur.execute(query, data)
           con.commit()
      except sqlite3.Error, e:
@@ -521,7 +526,7 @@ origin_buffs = [5, 35]
 dimensions_chart = [80, 43]
 
 #CONFIG
-ADD_TEST_DATA = 0
+ADD_TEST_DATA = 1
 DEBUGGING = 1
 decay_days = 30
 
@@ -603,11 +608,11 @@ while run == 1:
                menu_level = 'top'
                current_menu = 0
           elif menu_tree[menu_level][current_menu] == "ACTIVATE BUFF":
-               log_quest('buff')
+               log_quest('buff', -1)
                menu_level = 'top'
                current_menu = 0 
           elif menu_tree[menu_level][current_menu] == "LOG QUEST":
-               log_quest('quest')
+               log_quest('quest', -1)
                menu_level = 'top'
                current_menu = 0               
           elif menu_tree[menu_level][current_menu] == "EXIT": run = 0

@@ -9,6 +9,9 @@ import random
 import datetime
 
 #For Activate/Deactivate/Log make sure the SQL returns any data -- maybe no options to pick from
+#Debuffs broken -- not given as an option for activation
+#Prevent quests sharing names
+#Buffs currently broken cause they are applying before their creation-date (don't know how)
 
 locale.setlocale(locale.LC_ALL, '')
 
@@ -317,7 +320,21 @@ def add_quest(quest_type):
                """
           data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,icon_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
           cur.execute(query, data)       
-          con.commit()               
+          con.commit()  
+          if quest_type == 'buff':
+               query = """SELECT rowid from quests where name = ? and date_created = ?"""
+               data = [name_str, datetime.datetime.today().date().isoformat()]
+               cur.execute(query, data)       
+               con.commit() 
+               q_row = cur.fetchone()
+               query = """INSERT INTO completes
+                    (quest_id, date_completed, buff_bool)
+                    VALUES
+                    (?, ?, ?)
+                    """       
+               data = [q_row[0],datetime.datetime.today().date().isoformat(),0]
+               cur.execute(query, data)       
+               con.commit()                 
      except sqlite3.Error, e:
           screen.addstr(origin_error[1], origin_error[0], "--Error adding quest to database--")
      finally:
@@ -387,7 +404,7 @@ def log_quest(quest_type, rowid):
                     i = 0
                     for c_row in c_rows:
                          if quest_type == 'buff':
-                              buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
+                              buff_cmd = "screen.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
                          elif quest_type == 'buff_off':
                               buff_cmd = "screen.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
                          elif quest_type == 'quest':

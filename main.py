@@ -8,6 +8,8 @@ import sys
 import random
 import datetime
 
+#For Activate/Deactivate/Log make sure the SQL returns any data -- maybe no options to pick from
+
 locale.setlocale(locale.LC_ALL, '')
 
 def get_param(prompt_string):
@@ -133,7 +135,7 @@ def display_chart():
                scaling_factor = float(dimensions_chart[1]-8)/99
                for j in range(1,dimensions_chart[1]-8):
                     if float(tick) * scaling_factor > j:
-                         box_chart.addstr(dimensions_chart[1]-4-j, 5+i, u'\u2592'.encode('utf-8'))
+                         box_chart.addstr(dimensions_chart[1]-4-j, 77-i, u'\u2592'.encode('utf-8'))
 
           temp = tick
           i+=1
@@ -142,7 +144,6 @@ def display_chart():
      box_chart.addstr(4, 2, "99")
      for i in range(5,dimensions_chart[1]-4):
           box_chart.addstr(i, 3, u'\u2502'.encode('utf-8'))
-
      box_chart.addstr(dimensions_chart[1]-4, 3, "0")
      box_chart.addstr(dimensions_chart[1]-3, 3, u'\u2514'.encode('utf-8'))
      for i in range(1,75):
@@ -337,7 +338,18 @@ def log_quest(quest_type, rowid):
           cur = con.cursor()
           if not is_test_data:
                if quest_type == 'buff':
-                    query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
+                    query = """SELECT c_sub.quest_id, q.name, q.icon
+                         from quests q
+                         inner join (
+                              select c1.* from completes c1
+                              where c1.buff_bool = 0
+                              and not exists (
+                                   select c2.* from completes c2
+                                   where c2.quest_id = c1.quest_id
+                                   and c2.buff_bool = 1
+                                   and c2.date_completed >= c1.date_completed)) c_sub
+                         on q.rowid = c_sub.quest_id;
+                         """
                elif quest_type == 'quest':
                     query = """SELECT rowid, * FROM quests WHERE style = 'decay' ORDER BY name"""
                elif quest_type == 'buff_off':
@@ -366,10 +378,11 @@ def log_quest(quest_type, rowid):
 
                     if quest_type == 'buff':
                          screen.addstr(2, 2, "Which buff should be activated?")
-                    if quest_type == 'quest':
+                    elif quest_type == 'quest':
                          screen.addstr(2, 2, "Which quest did you complete?")
-                    if quest_type == 'buff_off':
+                    elif quest_type == 'buff_off':
                          screen.addstr(2, 2, "Which buff should be deactivated?")
+
 
                     i = 0
                     for c_row in c_rows:
@@ -394,8 +407,11 @@ def log_quest(quest_type, rowid):
                     elif cmd == curses.KEY_UP and menu_step > 0:
                          menu_step-=1
                     elif cmd == ord('\n'):
-                         rowid = c_rows[menu_step][0]
-                         attempt = 0
+                         if quest_type == 'buff_off' and 1: #CHANGE TO CATCH NO OPTION INSTANCES
+                              return
+                         else:
+                              rowid = c_rows[menu_step][0]
+                              attempt = 0
 
           query = """UPDATE quests SET status = 'closed' WHERE rowid = ? AND status = 'open'""" #will only affect quests are others are status = 'persistent'
           data = [int(rowid)]
@@ -542,7 +558,7 @@ def calc_attributes():
                     #IF COMPLETE TOOK PLACE ON OR BEFORE DAY IN QUESTION AND < 30 DAYS AGO
                     days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
                     if (days_since >= i) and (days_since - i < decay_days):
-                         decay_scaler = float(days_since-i)/float(decay_days)
+                         decay_scaler = float(decay_days-days_since-i)/float(decay_days)
                          query = """SELECT * FROM quests WHERE rowid = ?"""
                          data = [c_row[0]]
                          cur.execute(query,data)
@@ -602,7 +618,7 @@ dimensions_chart = [80, 43]
 
 #CONFIG
 ADD_TEST_DATA = 0
-DEBUGGING = 1
+DEBUGGING = 0
 decay_days = 30
 
 #OPERATING VARS
@@ -651,7 +667,7 @@ while run == 1:
      display_chart()
      box_chart.refresh()
 
-     ascii_char()
+     #ascii_char()
      display_quest_status()
 
      cmd = screen.getch()
@@ -686,14 +702,18 @@ while run == 1:
                log_quest('buff', -1)
                menu_level = 'top'
                current_menu = 0 
-          elif menu_tree[menu_level][current_menu] == "ACTIVATE BUFF":
+          elif menu_tree[menu_level][current_menu] == "DEACTIVATE BUFF":
                log_quest('buff_off', -1)
                menu_level = 'top'
                current_menu = 0 
           elif menu_tree[menu_level][current_menu] == "LOG QUEST":
                log_quest('quest', -1)
                menu_level = 'top'
-               current_menu = 0               
+               current_menu = 0  
+          elif menu_tree[menu_level][current_menu] == "REMOVE QUEST":
+               #PENDING
+               menu_level = 'top'
+               current_menu = 0             
           elif menu_tree[menu_level][current_menu] == "EXIT": run = 0
      if cmd == ord('x'): run = 0
 

@@ -162,7 +162,7 @@ def load_db():
           cur.execute("DROP TABLE IF EXISTS quests")
           cur.execute("DROP TABLE IF EXISTS completes")
           cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, icon TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT)")
-          cur.execute("CREATE TABLE completes(quest_id INT, date_completed TEXT)")
+          cur.execute("CREATE TABLE completes(quest_id INT, date_completed TEXT, buff_bool TEXT)")
 
           if ADD_TEST_DATA:
                for i in range(0,499):
@@ -335,8 +335,24 @@ def log_quest(quest_type, rowid):
      try:
           con = sqlite3.connect('char.db')
           cur = con.cursor()
-          if rowid < 0:
-               query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
+          if not is_test_data:
+               if quest_type == 'buff':
+                    query = """SELECT rowid, * FROM quests WHERE style = 'fixed' ORDER BY name"""
+               elif quest_type == 'quest':
+                    query = """SELECT rowid, * FROM quests WHERE style = 'decay' ORDER BY name"""
+               elif quest_type == 'buff_off':
+                    query = """SELECT c_sub.quest_id, q.name, q.icon
+                         from quests q
+                         inner join (
+                              select c1.* from completes c1
+                              where c1.buff_bool = 1
+                              and not exists (
+                                   select c2.* from completes c2
+                                   where c2.quest_id = c1.quest_id
+                                   and c2.buff_bool = 0
+                                   and c2.date_completed >= c1.date_completed)) c_sub
+                         on q.rowid = c_sub.quest_id;
+                         """
                cur.execute(query)
                con.commit()
 
@@ -348,11 +364,21 @@ def log_quest(quest_type, rowid):
                     screen.clear()
                     screen.border(0)
 
-                    screen.addstr(2, 2, "Which buff should be activated?")
+                    if quest_type == 'buff':
+                         screen.addstr(2, 2, "Which buff should be activated?")
+                    if quest_type == 'quest':
+                         screen.addstr(2, 2, "Which quest did you complete?")
+                    if quest_type == 'buff_off':
+                         screen.addstr(2, 2, "Which buff should be deactivated?")
 
                     i = 0
                     for c_row in c_rows:
-                         buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
+                         if quest_type == 'buff':
+                              buff_cmd = "screen.addstr(4+i*2,4, "+c_row[5]+".encode('utf-8'))"
+                         elif quest_type == 'buff_off':
+                              buff_cmd = "screen.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
+                         elif quest_type == 'quest':
+                              buff_cmd = "pass"
                          exec buff_cmd
                          screen.addstr(4+i*2, 6, c_row[1])
                          i+=1
@@ -371,21 +397,33 @@ def log_quest(quest_type, rowid):
                          rowid = c_rows[menu_step][0]
                          attempt = 0
 
-          query = """UPDATE quests SET status = 'closed' WHERE rowid = ? AND status = 'open'"""
+          query = """UPDATE quests SET status = 'closed' WHERE rowid = ? AND status = 'open'""" #will only affect quests are others are status = 'persistent'
           data = [int(rowid)]
           cur.execute(query,data)
           con.commit()
 
-          query = """INSERT INTO completes
-               (quest_id, date_completed)
-               VALUES
-               (?, ?)
-               """
+          if quest_type == 'buff' or quest_type == 'buff_off':
+               query = """INSERT INTO completes
+                    (quest_id, date_completed, buff_bool)
+                    VALUES
+                    (?, ?, ?)
+                    """
+          elif quest_type == 'quest':
+               query = """INSERT INTO completes
+                    (quest_id, date_completed)
+                    VALUES
+                    (?, ?)
+                    """
           if is_test_data:
                str_date = str(random.randint(8,12))+"/"+str(random.randint(1,30))+"/2013"
                act_date = datetime.datetime.strptime(str_date, '%m/%d/%Y').date().isoformat()
           else: act_date = datetime.datetime.today().date().isoformat()
-          data =  [int(rowid), act_date]
+          if quest_type == 'quest':
+               data =  [int(rowid), act_date]
+          elif quest_type == 'buff':
+               data = [int(rowid), act_date, 1]
+          elif quest_type == 'buff_off':
+               data = [int(rowid), act_date, 0]
           cur.execute(query, data)
           con.commit()
      except sqlite3.Error, e:
@@ -397,37 +435,61 @@ def log_quest(quest_type, rowid):
                calc_attributes()
 
 def display_buffs():
+     global buff_list
      box_buffs.addstr(2,2, "BUFFS")
      box_buffs.addstr(6,2, "DEBUFFS")
 
-     i = 0
-     i_row = 0
-     box_buffs.addstr(8, 4, str(len(buffs))) 
-     for buff in buffs:
-          if i > 8:
-                i_row = 1
-          buff_cmd = "box_buffs.addstr(2+i_row*2,11+2*i-i_row*18, "+buff+".encode('utf-8'))"
-          exec buff_cmd
-          if i > 14:
-               break
-          i+=1
+     try:
+          con = sqlite3.connect('char.db')
+          cur = con.cursor()
 
-     i = 0
-     i_row = 0
-     for buff in debuffs:
-          if i > 8:
-                i_row = 1
-          buff_cmd = "box_buffs.addstr(6+i_row*2,11+2*i-i_row*18, "+buff+".encode('utf-8'))"
-          exec buff_cmd
-          if i > 14:
-               break
-          i+=1
+          buff_i = 0
+          buff_row = 0
+          debuff_i = 0
+          debuff_row = 0
+          for k,v in buff_list.items():
+               buff_check = 0
+               debuff_check = 0
+               if int(v[0]) == 1:
+                    query = """SELECT * FROM quests WHERE rowid = ?"""
+                    data = [k]
+                    cur.execute(query,data)
+                    con.commit()
+                    q_row = cur.fetchone()
+
+                    for j in range (0, 7):
+                         if q_row[6+j] > 0:
+                              buff_check = 1
+                         if q_row[6+j] < 0:
+                              debuff_check = 1
+
+                    if buff_i > 8:
+                         buff_row = 1
+                    if debuff_i > 8:
+                         debuff_row = 1
+                    
+                    if buff_check:
+                         buff_cmd = "box_buffs.addstr(2+buff_row*2,11+2*buff_i-buff_row*18, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         buff_i += 1
+                    if debuff_check:
+                         buff_cmd = "box_buffs.addstr(2+debuff_row*2,11+2*debuff_i-debuff_row*18, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         debuff_i += 1
+                    if buff_i > 14 or debuff_i > 14:
+                         break
+
+     except sqlite3.Error, e:
+          screen.addstr(origin_error[1], origin_error[0], "--Error loading database for listing buffs--")
+     finally:
+          if con:
+               con.close()
 
 def calc_attributes():
      con = None
+     global buff_list
      impact_array = []
-     buffs = []
-     debuffs = []
+     buff_list = {}
      attr_hist = [[],[],[],[],[],[],[]]
 
      attributes['CHA'] = []
@@ -438,14 +500,38 @@ def calc_attributes():
      attributes['WIS'] = []
      attributes['WLL'] = []
 
-     #FOR EACH DATE IN LAST 100
-          #FOR EACH DECAY COMPLETE -- AGGREGATE IMPACT UNTIL < 1 (LINEAR DECAY 1 MONTH)
-          #FOR EACH FIXED COMPLETE -- ORDER BY QUEST_ID, DATE_COMPLETED DESC AND THEN LOOK ONLY FOR FIRST ENTRY FOR EA. QUEST_ID
      try:
           con = sqlite3.connect('char.db')
           cur = con.cursor()
 
+          #Build buff table -- append to set key = quest_id and value = [], then build that out
+          cur.execute("""SELECT DISTINCT completes.quest_id
+               FROM completes
+               INNER JOIN quests ON completes.quest_id = quests.rowid
+               WHERE quests.style = 'fixed' and completes.buff_bool = 1
+               ORDER BY completes.quest_id""") #all entries for
+          con.commit()
+          c_rows = cur.fetchall()
+          for c_row in c_rows:
+               buff_list[c_row[0]] = []
+
+          for k, v in buff_list.items():
+               query = """SELECT * FROM completes WHERE quest_id = ? ORDER BY date_completed ASC"""
+               data = [k]
+               cur.execute(query,data)
+               con.commit()
+               c_rows = cur.fetchall()
+
+               daily_status = 0
+               for i in range (0, 73):
+                    for c_row in c_rows:
+                         days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
+                         if days_since == i:
+                              daily_status = c_row[2]
+                    buff_list[k].append(daily_status)
+
           for i in range(0, 73):
+               #QUESTS
                for j in range (0, 7):
                    attr_hist[j].append(0)            
                cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'decay'")
@@ -464,30 +550,17 @@ def calc_attributes():
                          for j in range (0, 7):
                               attr_hist[j][i] += (float(q_row[6+j])*decay_scaler)
 
-               #ADD FIXED
-               cur.execute("SELECT quest_id, max(date_completed) FROM completes GROUP BY quest_id")
-               cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'fixed'")
-               con.commit()
-               c_rows = cur.fetchall()
-               for c_row in c_rows:
+               #BUFFS
+               for k, v in buff_list.items():
                     buff_active = 0
                     debuff_active = 0
-                    days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
-                    if days_since >= i:
-                         query = """SELECT * FROM quests WHERE rowid = ?"""
-                         data = [c_row[0]]
-                         cur.execute(query,data)
-                         q_row = cur.fetchone()
-                         for j in range (0, 7):
-                              attr_hist[j][i] += float(q_row[6+j])
-                              if q_row[6+j] > 0:
-                                   buff_active = 1
-                              if q_row[6+j] < 0:
-                                   debuff_active = 1
-                         if buff_active: 
-                              buffs.append(q_row[4])
-                         if debuff_active:
-                              debuffs.append(q_row[4])
+                    query = """SELECT * FROM quests WHERE rowid = ?"""
+                    data = [k]
+                    cur.execute(query,data)
+                    con.commit()
+                    q_row = cur.fetchone()
+                    for j in range (0, 7):
+                         attr_hist[j][i] += float(q_row[6+j])*float(v[i]) #attribute value * daily_status array from buff_list
 
                attributes['CHA'].append(min(attr_hist[0][i],99))
                attributes['DEX'].append(min(attr_hist[1][i],99))
@@ -505,17 +578,19 @@ def calc_attributes():
           if con:
                con.close()
 
-#SYSTEM VARIABLES
+#SYSTEM VARS
 config = {}
 attributes = {'INT': [], 'VIT': [], 'STR': [], 'WIS': [], 'WLL': [], 'DEX': [], 'CHA': []}
 attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
 buffs = []
 debuffs = []
+buff_list = {}
 menu_tree = {'top':["QUESTS", "BUFFS", "SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "REMOVE BUFF", "MAIN MENU"]}
 
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2691'" ,"u'\u2693'", "u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2615'", "u'\u2646'"]
 
+#LAYOUT VARS
 origin_attr = [5, 46]
 origin_portrait = [10, 3]
 origin_menu = [5, 63]
@@ -526,7 +601,7 @@ origin_buffs = [5, 35]
 dimensions_chart = [80, 43]
 
 #CONFIG
-ADD_TEST_DATA = 1
+ADD_TEST_DATA = 0
 DEBUGGING = 1
 decay_days = 30
 
@@ -548,8 +623,8 @@ if (datetime.datetime.today()-datetime.datetime.strptime(config['last_calc'], "%
      calc_attributes()
 
 while run == 1:
-     #if DEBUGGING:
-     #     calc_attributes()
+     if DEBUGGING:
+          calc_attributes()
 
      screen.clear()
      screen.border(0)
@@ -576,7 +651,7 @@ while run == 1:
      display_chart()
      box_chart.refresh()
 
-     ascii_char()
+     #ascii_char()
      display_quest_status()
 
      cmd = screen.getch()
@@ -609,6 +684,10 @@ while run == 1:
                current_menu = 0
           elif menu_tree[menu_level][current_menu] == "ACTIVATE BUFF":
                log_quest('buff', -1)
+               menu_level = 'top'
+               current_menu = 0 
+          elif menu_tree[menu_level][current_menu] == "ACTIVATE BUFF":
+               log_quest('buff_off', -1)
                menu_level = 'top'
                current_menu = 0 
           elif menu_tree[menu_level][current_menu] == "LOG QUEST":

@@ -651,7 +651,7 @@ while run == 1:
      display_chart()
      box_chart.refresh()
 
-     #ascii_char()
+     ascii_char()
      display_quest_status()
 
      cmd = screen.getch()

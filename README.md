@@ -13,6 +13,6 @@ BUGS:
 --If retaining session data (CLEAN_START = 0), buffs don't show until a refresh
 
 PENDING FEATURES:
---Long list of active buffs
+--List buff impacts on activation selection screen (and maybe distinguish buff vs debuff)
 --Quest/buff addition and activation from side-window rather than full view
 --Add text-based version for simplified access (access w/ a cmd flag)

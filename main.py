@@ -78,6 +78,9 @@ def ascii_char():
           screen.addstr( origin_portrait[1]+26, origin_portrait[0], u'       \u2588\u2588\u2588   \u2588   '.encode('utf-8'))
           screen.addstr( origin_portrait[1]+27, origin_portrait[0], u'          \u2588\u2588\u2588\u2588'.encode('utf-8'))
 
+     screen.addstr( origin_portrait[1]+29, origin_portrait[0], "Level 29 Human", curses.A_BOLD)     
+     screen.addstr(0,0, "") 
+
 def load_config():
      file = open('.config', 'r')
      for line in file:
@@ -196,6 +199,62 @@ def load_db():
           if con:
                con.close()
 
+def list_buffs():
+     global buff_list
+
+     try:
+          con = sqlite3.connect('char.db')
+          cur = con.cursor()
+
+          box_feature.addstr(4,4, "BUFFS", curses.A_BOLD)
+
+          i = 0
+          for k,v in buff_list.items():
+               if int(v[0]) == 1:
+                    query = """SELECT * FROM quests WHERE rowid = ? and
+                         (cha_val > 0 or int_val > 0 or vit_val > 0 or str_val > 0 or wis_val > 0 or dex_val > 0 or wll_val > 0)"""
+                    data = [k]
+                    cur.execute(query,data)
+                    con.commit()
+                    q_row = cur.fetchone()
+
+                    if q_row:
+                         buff_cmd = "box_feature.addstr(6+i*5,5, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         box_feature.addstr(6+i*5, 7, q_row[0])
+                         for j in range (0, 7):
+                             box_feature.addstr(6+i*5+2, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
+
+                    i+=1
+
+          box_feature.addstr(6+i*5,4, "DEBUFFS", curses.A_BOLD)
+
+          for k,v in buff_list.items():
+               if int(v[0]) == 1:
+                    query = """SELECT * FROM quests WHERE rowid = ? and
+                         (cha_val < 0 or int_val < 0 or vit_val < 0 or str_val < 0 or wis_val < 0 or dex_val < 0 or wll_val < 0)"""
+                    data = [k]
+                    cur.execute(query,data)
+                    con.commit()
+                    q_row = cur.fetchone()
+
+                    if q_row:
+                         buff_cmd = "box_feature.addstr(4+i*5-1,5, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         box_feature.addstr(4+i*5-1, 7, q_row[0])
+                         z = 0
+                         for j in range (0, 7):
+                             box_feature.addstr(4+i*5+1, 7+z*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
+                             
+                    i+=1
+
+     except sqlite3.Error, e:
+          screen.addstr(origin_error[1], origin_error[0], "--Error loading database for listing buffs--")
+     finally:
+          if con:
+               con.close()
+     
+
 def add_quest(quest_type):
      val_array = [0,0,0,0,0,0,0]
 
@@ -222,7 +281,7 @@ def add_quest(quest_type):
                cur = con.cursor()
 
                query = """SELECT * FROM quests
-                    WHERE name = ?
+                    WHERE name = ? and (status = 'open' or status = 'persistent')
                     """
                data =  [name_str]
                cur.execute(query, data)       
@@ -659,19 +718,21 @@ attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS'
 buffs = []
 debuffs = []
 buff_list = {}
-menu_tree = {'top':["QUESTS", "BUFFS", "SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "REMOVE BUFF", "MAIN MENU"]}
+menu_tree = {'top':["QUESTS", "BUFFS", "CHARTS","SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["LIST BUFFS","ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "DELETE BUFF", "MAIN MENU"]}
 
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
 
-#LAYOUT VARS
-origin_attr = [5, 46]
+#LAYOUT VARS [x, y] notation which is reversed [row, col]
+origin_attr = [5, 47]
 origin_portrait = [10, 3]
-origin_menu = [5, 63]
-origin_chart = [38, 35]
+origin_menu = [5, 64]
+origin_chart = [38, 36]
 origin_quests = [38, 5]
 origin_error = [3, 3]
-origin_buffs = [5, 35]
+origin_buffs = [5, 36]
+origin_feature = [38, 5]
 dimensions_chart = [80, 43]
+dimensions_feature = [80, 74]
 
 #CONFIG
 ADD_TEST_DATA = 0
@@ -685,6 +746,7 @@ run = 1
 menu_level = 'top'
 current_menu = 0
 current_chart = 0
+current_feature = 'chart_single'
 
 #INITIALIZATION
 screen = curses.initscr()
@@ -710,6 +772,8 @@ while run == 1:
      box_chart.box()
      box_buffs = curses.newwin(11, 32, origin_buffs[1]-2, origin_buffs[0]-2)
      box_buffs.box()
+     box_feature = curses.newwin(dimensions_feature[1], dimensions_feature[0], origin_feature[1]-2, origin_feature[0]-2)
+     box_feature.box()
   
      screen.refresh()
 
@@ -722,11 +786,15 @@ while run == 1:
      display_menu()
      box_menu.refresh()
 
-     display_chart()
-     box_chart.refresh()
+     if current_feature == 'chart_single':
+          display_chart()
+          display_quest_status()
+          box_chart.refresh()
+     elif current_feature == 'list_buffs':
+          list_buffs()
+          box_feature.refresh()
 
      ascii_char()
-     display_quest_status()
 
      cmd = screen.getch()
 
@@ -742,6 +810,10 @@ while run == 1:
           if menu_tree[menu_level][current_menu] == "QUESTS":
                menu_level = 'quests'
                current_menu = 0
+          if menu_tree[menu_level][current_menu] == "CHARTS":
+               current_feature = 'chart_single'
+               menu_level = 'quests'
+               current_menu = 0
           elif menu_tree[menu_level][current_menu] == "BUFFS":
                menu_level = 'buffs'
                current_menu = 0
@@ -750,6 +822,10 @@ while run == 1:
                current_menu = 0
           elif menu_tree[menu_level][current_menu] == "ADD QUEST":
                add_quest('quest')
+               menu_level = 'top'
+               current_menu = 0
+          elif menu_tree[menu_level][current_menu] == "LIST BUFFS":
+               current_feature = 'list_buffs'
                menu_level = 'top'
                current_menu = 0
           elif menu_tree[menu_level][current_menu] == "ADD BUFF":

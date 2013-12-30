@@ -102,9 +102,10 @@ def display_attr():
           box_attr.addstr(2+i, 2, k, curses.A_BOLD)
           box_attr.addstr(2+i, 2 + 3, " - ")
           if len(attributes[k]) > 0:
-               box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][len(attributes[k])-1])))
+               box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][0])))
+               #box_attr.addstr(2+i, 2 + 6, str(int(attributes[k][len(attributes[k])-1])))
                for j in range(0,20):
-                    if int(attributes[k][len(attributes[k])-1]/5)>j:
+                    if int(attributes[k][0]*20/99)>j:
                          screen.addstr(origin_attr[1]+i, origin_attr[0] + 9 + j, u'\u25AA'.encode('utf-8'))
           else:
                box_attr.addstr(2+i, 2 + 6, "0")
@@ -119,26 +120,14 @@ def display_menu():
           box_menu.addstr(2+current_menu*2, 2, u'\u25BA'.encode('utf-8'))
 
 def display_chart():
+     global attributes
      i=0
-     temp = 0
      box_chart.addstr(2, 2, attributes_l[attributes_o[current_chart]], curses.A_BOLD)
      for tick in attributes[attributes_o[current_chart]]:
-          if 0: #LEVEL CHART -- MUST FIX SCALING
-               if temp!=tick:
-                    box_chart.addstr(dimensions_chart[1]-5-tick, 5+i, u'\u251C'.encode('utf-8'))
-               # if tick < temp:
-               #      box_chart.addstr(dimensions_chart[1]-5-tick, 2+i, u'\u2514'.encode('utf-8'))
-               # elif tick > temp:
-               #      box_chart.addstr(dimensions_chart[1]-5-tick, 2+i, u'\u250C'.encode('utf-8'))
-               else:
-                    box_chart.addstr(dimensions_chart[1]-5-tick, 5+i, u'\u2500'.encode('utf-8'))
-          else: #BAR CHART
-               scaling_factor = float(dimensions_chart[1]-8)/99
-               for j in range(1,dimensions_chart[1]-8):
-                    if float(tick) * scaling_factor > j:
-                         box_chart.addstr(dimensions_chart[1]-4-j, 77-i, u'\u2592'.encode('utf-8'))
-
-          temp = tick
+          scaling_factor = float(dimensions_chart[1]-8)/99
+          for j in range(1,dimensions_chart[1]-8):
+               if float(tick) * scaling_factor > j:
+                    box_chart.addstr(dimensions_chart[1]-4-j, 77-i, u'\u2592'.encode('utf-8'))
           i+=1
      
      #AXES
@@ -199,7 +188,7 @@ def load_db():
           if con:
                con.close()
 
-def list_buffs():
+def feature_list_buffs():
      global buff_list
 
      try:
@@ -242,9 +231,8 @@ def list_buffs():
                          buff_cmd = "box_feature.addstr(4+i*5-1,5, "+q_row[4]+".encode('utf-8'))"
                          exec buff_cmd
                          box_feature.addstr(4+i*5-1, 7, q_row[0])
-                         z = 0
                          for j in range (0, 7):
-                             box_feature.addstr(4+i*5+1, 7+z*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
+                             box_feature.addstr(4+i*5+1, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
                              
                     i+=1
 
@@ -254,6 +242,27 @@ def list_buffs():
           if con:
                con.close()
      
+
+# def feature_chart_multi():
+#      for k,v in attributes.items():
+#           attr_i = 0
+#           i=0
+#           # box_chart.addstr(2, 2, attributes_l[attributes_o[current_chart]], curses.A_BOLD)
+#           for tick in v:
+#                scaling_factor = float(dimensions_chart[1]-8)/99
+#                for j in range(1,dimensions_chart[1]-8):
+#                     if float(tick) * scaling_factor > j:
+#                          box_chart.addstr(dimensions_chart[1]-4-j, 77-i, u'\u2592'.encode('utf-8'))
+#                i+=1
+          
+#           #AXES
+#           for i in range(5,dimensions_chart[1]-4):
+#                box_feature.addstr(i, 3, u'\u2502'.encode('utf-8'))
+#           box_chart.addstr(dimensions_chart[1]-3, 3, u'\u2514'.encode('utf-8'))
+#           for i in range(1,75):
+#                box_chart.addstr(dimensions_chart[1]-3, 3+i, u'\u2500'.encode('utf-8'))
+
+#           attr_i += 1
 
 def add_quest(quest_type):
      val_array = [0,0,0,0,0,0,0]
@@ -615,8 +624,10 @@ def display_buffs():
                con.close()
 
 def calc_attributes():
-     con = None
+     global attributes
      global buff_list
+
+     con = None
      impact_array = []
      buff_list = {}
      attr_hist = [[],[],[],[],[],[],[]]
@@ -664,7 +675,7 @@ def calc_attributes():
 
           for i in range(0, 73):
                #QUESTS
-               for j in range (0, 7):
+               for j in range (0, 7): #append a new day slot to each of 7 attributes
                    attr_hist[j].append(0)            
                cur.execute("SELECT completes.* FROM completes INNER JOIN quests ON completes.quest_id = quests.rowid WHERE quests.style = 'decay'")
                con.commit()
@@ -674,7 +685,7 @@ def calc_attributes():
                     #IF COMPLETE TOOK PLACE ON OR BEFORE DAY IN QUESTION AND < 30 DAYS AGO
                     days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
                     if (days_since >= i) and (days_since - i < decay_days):
-                         decay_scaler = float(decay_days-days_since-i)/float(decay_days)
+                         decay_scaler = float(decay_days-(days_since-i))/float(decay_days)
                          query = """SELECT * FROM quests WHERE rowid = ?"""
                          data = [c_row[0]]
                          cur.execute(query,data)
@@ -719,7 +730,6 @@ buffs = []
 debuffs = []
 buff_list = {}
 menu_tree = {'top':["QUESTS", "BUFFS", "CHARTS","SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["LIST BUFFS","ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "DELETE BUFF", "MAIN MENU"]}
-
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
 
 #LAYOUT VARS [x, y] notation which is reversed [row, col]
@@ -735,8 +745,8 @@ dimensions_chart = [80, 43]
 dimensions_feature = [80, 74]
 
 #CONFIG
-ADD_TEST_DATA = 0
-DEBUGGING = 0
+ADD_TEST_DATA = 1
+DEBUGGING = 1
 CLEAN_START = 1
 decay_days = 30
 
@@ -774,7 +784,7 @@ while run == 1:
      box_buffs.box()
      box_feature = curses.newwin(dimensions_feature[1], dimensions_feature[0], origin_feature[1]-2, origin_feature[0]-2)
      box_feature.box()
-  
+
      screen.refresh()
 
      display_buffs()
@@ -790,8 +800,11 @@ while run == 1:
           display_chart()
           display_quest_status()
           box_chart.refresh()
+     elif current_feature == 'chart_multi':
+          feature_chart_multi()
+          box_feature.refresh()
      elif current_feature == 'list_buffs':
-          list_buffs()
+          feature_list_buffs()
           box_feature.refresh()
 
      ascii_char()
@@ -810,7 +823,7 @@ while run == 1:
           if menu_tree[menu_level][current_menu] == "QUESTS":
                menu_level = 'quests'
                current_menu = 0
-          if menu_tree[menu_level][current_menu] == "CHARTS":
+          elif menu_tree[menu_level][current_menu] == "CHARTS":
                current_feature = 'chart_single'
                menu_level = 'quests'
                current_menu = 0

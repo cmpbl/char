@@ -8,11 +8,6 @@ import sys
 import random
 import datetime
 
-#For Activate/Deactivate/Log make sure the SQL returns any data -- maybe no options to pick from
-#Debuffs broken -- not given as an option for activation
-#Prevent quests sharing names
-#Buffs currently broken cause they are applying before their creation-date (don't know how)
-
 locale.setlocale(locale.LC_ALL, '')
 
 def get_param(prompt_string):
@@ -163,8 +158,9 @@ def load_db():
          
           cur = con.cursor()
 
-          cur.execute("DROP TABLE IF EXISTS quests")
-          cur.execute("DROP TABLE IF EXISTS completes")
+          if CLEAN_START:
+               cur.execute("DROP TABLE IF EXISTS quests")
+               cur.execute("DROP TABLE IF EXISTS completes")
           cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, icon TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT)")
           cur.execute("CREATE TABLE completes(quest_id INT, date_completed TEXT, buff_bool TEXT)")
 
@@ -220,7 +216,29 @@ def add_quest(quest_type):
                screen.addstr(2,2, "What is this buff or debuff?")
           screen.refresh()
           name_str = screen.getstr(10, 10, 60)
-          if len(name_str)>0:
+
+          try:
+               con = sqlite3.connect('char.db')
+               cur = con.cursor()
+
+               query = """SELECT * FROM quests
+                    WHERE name = ?
+                    """
+               data =  [name_str]
+               cur.execute(query, data)       
+               con.commit()
+               q_rows = cur.fetchall()
+          except sqlite3.Error, e:
+               screen.addstr(origin_error[1], origin_error[0], "--Error adding quest to database--")
+          finally:
+               if con:
+                    con.close()
+
+          if len(q_rows) > 0:
+               screen.addstr(2,2, "A quest or buff with that name already exists.")
+               screen.refresh()
+               cmd = screen.getch()
+          elif len(name_str)>0:
                attempt = 0
 
      if quest_type == 'quest':
@@ -387,6 +405,25 @@ def log_quest(quest_type, rowid):
 
                c_rows = cur.fetchall()
 
+               if len(c_rows)==0 and quest_type == 'buff':
+                    screen.clear()
+                    screen.border(0)
+                    screen.addstr(2, 2, "You have not added any buffs or debuffs to activate, or they are all currently active.")
+                    cmd = screen.getch()
+                    return
+               elif len(c_rows) == 0 and quest_type == 'buff_off':
+                    screen.clear()
+                    screen.border(0)
+                    screen.addstr(2, 2, "There are no buffs or debuffs eligible for removal.  Buffs and debuffs cannot be removed the same day as they were added.")
+                    cmd = screen.getch()
+                    return
+               elif len(c_rows) == 0 and quest_type == 'quest':
+                    screen.clear()
+                    screen.border(0)
+                    screen.addstr(2, 2, "There are currently no open quests.")
+                    cmd = screen.getch()
+                    return
+
                attempt = 1
                menu_step = 0
                while attempt == 1:
@@ -506,7 +543,7 @@ def display_buffs():
                          exec buff_cmd
                          buff_i += 1
                     if debuff_check:
-                         buff_cmd = "box_buffs.addstr(2+debuff_row*2,11+2*debuff_i-debuff_row*18, "+q_row[4]+".encode('utf-8'))"
+                         buff_cmd = "box_buffs.addstr(6+debuff_row*2,11+2*debuff_i-debuff_row*18, "+q_row[4]+".encode('utf-8'))"
                          exec buff_cmd
                          debuff_i += 1
                     if buff_i > 14 or debuff_i > 14:
@@ -546,6 +583,7 @@ def calc_attributes():
           con.commit()
           c_rows = cur.fetchall()
           for c_row in c_rows:
+               #populates a dictionary with a key for every buff that has ever been active, value is an empty array which will become the daily array
                buff_list[c_row[0]] = []
 
           for k, v in buff_list.items():
@@ -556,12 +594,14 @@ def calc_attributes():
                c_rows = cur.fetchall()
 
                daily_status = 0
-               for i in range (0, 73):
+               temp_array = []
+               for i in reversed(range (0, 73)):
                     for c_row in c_rows:
                          days_since = (datetime.datetime.today()-datetime.datetime.strptime(c_row[1], "%Y-%m-%d" )).days
                          if days_since == i:
                               daily_status = c_row[2]
-                    buff_list[k].append(daily_status)
+                    temp_array.append(daily_status)
+               buff_list[k] = temp_array[::-1]
 
           for i in range(0, 73):
                #QUESTS
@@ -595,13 +635,13 @@ def calc_attributes():
                     for j in range (0, 7):
                          attr_hist[j][i] += float(q_row[6+j])*float(v[i]) #attribute value * daily_status array from buff_list
 
-               attributes['CHA'].append(min(attr_hist[0][i],99))
-               attributes['DEX'].append(min(attr_hist[1][i],99))
-               attributes['INT'].append(min(attr_hist[2][i],99))
-               attributes['STR'].append(min(attr_hist[3][i],99))
-               attributes['VIT'].append(min(attr_hist[4][i],99))
-               attributes['WIS'].append(min(attr_hist[5][i],99))
-               attributes['WLL'].append(min(attr_hist[6][i],99))
+               attributes['CHA'].append(max(min(attr_hist[0][i],99),0))
+               attributes['DEX'].append(max(min(attr_hist[1][i],99),0))
+               attributes['INT'].append(max(min(attr_hist[2][i],99),0))
+               attributes['STR'].append(max(min(attr_hist[3][i],99),0))
+               attributes['VIT'].append(max(min(attr_hist[4][i],99),0))
+               attributes['WIS'].append(max(min(attr_hist[5][i],99),0))
+               attributes['WLL'].append(max(min(attr_hist[6][i],99),0))
 
           config['last_calc'] = str(datetime.datetime.today().date().isoformat())
 
@@ -621,7 +661,7 @@ debuffs = []
 buff_list = {}
 menu_tree = {'top':["QUESTS", "BUFFS", "SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "REMOVE BUFF", "MAIN MENU"]}
 
-icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2691'" ,"u'\u2693'", "u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2615'", "u'\u2646'"]
+icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
 
 #LAYOUT VARS
 origin_attr = [5, 46]
@@ -636,6 +676,7 @@ dimensions_chart = [80, 43]
 #CONFIG
 ADD_TEST_DATA = 0
 DEBUGGING = 0
+CLEAN_START = 1
 decay_days = 30
 
 #OPERATING VARS
@@ -684,7 +725,7 @@ while run == 1:
      display_chart()
      box_chart.refresh()
 
-     #ascii_char()
+     ascii_char()
      display_quest_status()
 
      cmd = screen.getch()

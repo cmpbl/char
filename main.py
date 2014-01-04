@@ -139,6 +139,57 @@ def display_chart():
      for i in range(1,75):
           box_chart.addstr(dimensions_chart[1]-3, 3+i, u'\u2500'.encode('utf-8'))
 
+def display_buffs():
+     global buff_list
+     box_buffs.addstr(2,2, "BUFFS")
+     box_buffs.addstr(6,2, "DEBUFFS")
+
+     try:
+          con = sqlite3.connect('char.db')
+          cur = con.cursor()
+
+          buff_i = 0
+          buff_row = 0
+          debuff_i = 0
+          debuff_row = 0
+          for k,v in buff_list.items():
+               buff_check = 0
+               debuff_check = 0
+               if int(v[0]) == 1:
+                    query = """SELECT * FROM quests WHERE rowid = ?"""
+                    data = [k]
+                    cur.execute(query,data)
+                    con.commit()
+                    q_row = cur.fetchone()
+
+                    for j in range (0, 7):
+                         if q_row[6+j] > 0:
+                              buff_check = 1
+                         if q_row[6+j] < 0:
+                              debuff_check = 1
+
+                    if buff_i > 8:
+                         buff_row = 1
+                    if debuff_i > 8:
+                         debuff_row = 1
+                    
+                    if buff_check:
+                         buff_cmd = "box_buffs.addstr(2+buff_row*2,11+2*buff_i-buff_row*18, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         buff_i += 1
+                    if debuff_check:
+                         buff_cmd = "box_buffs.addstr(6+debuff_row*2,11+2*debuff_i-debuff_row*18, "+q_row[4]+".encode('utf-8'))"
+                         exec buff_cmd
+                         debuff_i += 1
+                    if buff_i > 14 or debuff_i > 14:
+                         break
+
+     except sqlite3.Error, e:
+          screen.addstr(origin_error[1], origin_error[0], "--Error loading database for listing buffs--")
+     finally:
+          if con:
+               con.close()
+
 def display_quest_status():
      screen.addstr(origin_quests[1], origin_quests[0], "ACTIVE", curses.A_BOLD)
 
@@ -240,29 +291,35 @@ def feature_list_buffs():
           screen.addstr(origin_error[1], origin_error[0], "--Error loading database for listing buffs--")
      finally:
           if con:
-               con.close()
-     
+               con.close()   
 
-# def feature_chart_multi():
-#      for k,v in attributes.items():
-#           attr_i = 0
-#           i=0
-#           # box_chart.addstr(2, 2, attributes_l[attributes_o[current_chart]], curses.A_BOLD)
-#           for tick in v:
-#                scaling_factor = float(dimensions_chart[1]-8)/99
-#                for j in range(1,dimensions_chart[1]-8):
-#                     if float(tick) * scaling_factor > j:
-#                          box_chart.addstr(dimensions_chart[1]-4-j, 77-i, u'\u2592'.encode('utf-8'))
-#                i+=1
+def feature_chart_multi():
+     attr_i = 0
+     for k,v in attributes.items():
+
+          #ATTR LABELS
+          box_feature.addstr(7+10*attr_i, 3, k, curses.A_BOLD)
+
+          #VALUES
+          i=0
+          for tick in v:
+               scaling_factor = float(dimensions_feature[1])/99/len(attributes_o)
+               if i < 68:
+                    for j in range(1,8):
+                         if float(tick) * scaling_factor > j:
+                              pass
+                              box_feature.addstr(10-j+10*attr_i, 76-i, u'\u2592'.encode('utf-8'))
+               i+=1
           
-#           #AXES
-#           for i in range(5,dimensions_chart[1]-4):
-#                box_feature.addstr(i, 3, u'\u2502'.encode('utf-8'))
-#           box_chart.addstr(dimensions_chart[1]-3, 3, u'\u2514'.encode('utf-8'))
-#           for i in range(1,75):
-#                box_chart.addstr(dimensions_chart[1]-3, 3+i, u'\u2500'.encode('utf-8'))
+          #AXES
+          for i in range(4+dimensions_feature[1]/len(attributes_o)*attr_i-1,dimensions_feature[1]/len(attributes_o)*attr_i+11):
+               box_feature.addstr(i, 8, u'\u2502'.encode('utf-8'))
+          box_feature.addstr(dimensions_feature[1]/len(attributes_o)*attr_i+10, 8, u'\u2514'.encode('utf-8'))
 
-#           attr_i += 1
+          for i in range(1,69):
+               box_feature.addstr(dimensions_feature[1]/len(attributes_o)*attr_i+10, 8+i, u'\u2500'.encode('utf-8'))
+
+          attr_i += 1
 
 def add_quest(quest_type):
      val_array = [0,0,0,0,0,0,0]
@@ -474,21 +531,18 @@ def log_quest(quest_type, rowid):
                c_rows = cur.fetchall()
 
                if len(c_rows)==0 and quest_type == 'buff':
-                    screen.clear()
-                    screen.border(0)
-                    screen.addstr(2, 2, "You have not added any buffs or debuffs to activate, or they are all currently active.")
+                    box_alert.addstr(2,2,"You have not added any buffs or debuffs to activate, or they are all currently active.")
+                    box_alert.refresh()
                     cmd = screen.getch()
                     return
                elif len(c_rows) == 0 and quest_type == 'buff_off':
-                    screen.clear()
-                    screen.border(0)
-                    screen.addstr(2, 2, "There are no buffs or debuffs eligible for removal.  Buffs and debuffs cannot be removed the same day as they were added.")
+                    box_alert.addstr(2,2,"There are no buffs or debuffs eligible for removal.")
+                    box_alert.refresh()
                     cmd = screen.getch()
                     return
                elif len(c_rows) == 0 and quest_type == 'quest':
-                    screen.clear()
-                    screen.border(0)
-                    screen.addstr(2, 2, "There are currently no open quests.")
+                    box_alert.addstr(2,2,"There are currently no open quests.")
+                    box_alert.refresh()
                     cmd = screen.getch()
                     return
 
@@ -571,57 +625,6 @@ def log_quest(quest_type, rowid):
                con.close()
           if not ADD_TEST_DATA:
                calc_attributes()
-
-def display_buffs():
-     global buff_list
-     box_buffs.addstr(2,2, "BUFFS")
-     box_buffs.addstr(6,2, "DEBUFFS")
-
-     try:
-          con = sqlite3.connect('char.db')
-          cur = con.cursor()
-
-          buff_i = 0
-          buff_row = 0
-          debuff_i = 0
-          debuff_row = 0
-          for k,v in buff_list.items():
-               buff_check = 0
-               debuff_check = 0
-               if int(v[0]) == 1:
-                    query = """SELECT * FROM quests WHERE rowid = ?"""
-                    data = [k]
-                    cur.execute(query,data)
-                    con.commit()
-                    q_row = cur.fetchone()
-
-                    for j in range (0, 7):
-                         if q_row[6+j] > 0:
-                              buff_check = 1
-                         if q_row[6+j] < 0:
-                              debuff_check = 1
-
-                    if buff_i > 8:
-                         buff_row = 1
-                    if debuff_i > 8:
-                         debuff_row = 1
-                    
-                    if buff_check:
-                         buff_cmd = "box_buffs.addstr(2+buff_row*2,11+2*buff_i-buff_row*18, "+q_row[4]+".encode('utf-8'))"
-                         exec buff_cmd
-                         buff_i += 1
-                    if debuff_check:
-                         buff_cmd = "box_buffs.addstr(6+debuff_row*2,11+2*debuff_i-debuff_row*18, "+q_row[4]+".encode('utf-8'))"
-                         exec buff_cmd
-                         debuff_i += 1
-                    if buff_i > 14 or debuff_i > 14:
-                         break
-
-     except sqlite3.Error, e:
-          screen.addstr(origin_error[1], origin_error[0], "--Error loading database for listing buffs--")
-     finally:
-          if con:
-               con.close()
 
 def calc_attributes():
      global attributes
@@ -726,10 +729,8 @@ config = {}
 attributes = {'INT': [], 'VIT': [], 'STR': [], 'WIS': [], 'WLL': [], 'DEX': [], 'CHA': []}
 attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
-buffs = []
-debuffs = []
 buff_list = {}
-menu_tree = {'top':["QUESTS", "BUFFS", "CHARTS","SETTINGS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "REMOVE QUEST", "MAIN MENU"], 'buffs':["LIST BUFFS","ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "DELETE BUFF", "MAIN MENU"]}
+menu_tree = {'top':["QUESTS", "BUFFS", "VIEWS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "CLOSE QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "DELETE BUFF", "MAIN MENU"], 'views':["OVERVIEW", "LIST BUFFS", "ATTRIBUTES"]}
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
 
 #LAYOUT VARS [x, y] notation which is reversed [row, col]
@@ -741,13 +742,14 @@ origin_quests = [38, 5]
 origin_error = [3, 3]
 origin_buffs = [5, 36]
 origin_feature = [38, 5]
+origin_alert = [40,30]
 dimensions_chart = [80, 43]
 dimensions_feature = [80, 74]
 
 #CONFIG
-ADD_TEST_DATA = 1
-DEBUGGING = 1
-CLEAN_START = 1
+ADD_TEST_DATA = 0
+DEBUGGING = 0
+CLEAN_START = 0
 decay_days = 30
 
 #OPERATING VARS
@@ -756,7 +758,7 @@ run = 1
 menu_level = 'top'
 current_menu = 0
 current_chart = 0
-current_feature = 'chart_single'
+current_feature = 'chart_multi'
 
 #INITIALIZATION
 screen = curses.initscr()
@@ -765,8 +767,8 @@ screen.keypad(1)
 
 load_config()
 load_db()
-if (datetime.datetime.today()-datetime.datetime.strptime(config['last_calc'], "%Y-%m-%d" )).days > 0:
-     calc_attributes()
+
+calc_attributes()
 
 while run == 1:
      if DEBUGGING:
@@ -784,6 +786,8 @@ while run == 1:
      box_buffs.box()
      box_feature = curses.newwin(dimensions_feature[1], dimensions_feature[0], origin_feature[1]-2, origin_feature[0]-2)
      box_feature.box()
+     box_alert = curses.newwin(15,45,origin_alert[1],origin_alert[0])
+     box_alert.box()
 
      screen.refresh()
 
@@ -823,9 +827,8 @@ while run == 1:
           if menu_tree[menu_level][current_menu] == "QUESTS":
                menu_level = 'quests'
                current_menu = 0
-          elif menu_tree[menu_level][current_menu] == "CHARTS":
-               current_feature = 'chart_single'
-               menu_level = 'quests'
+          elif menu_tree[menu_level][current_menu] == "VIEWS":
+               menu_level = 'views'
                current_menu = 0
           elif menu_tree[menu_level][current_menu] == "BUFFS":
                menu_level = 'buffs'
@@ -851,6 +854,14 @@ while run == 1:
                current_menu = 0 
           elif menu_tree[menu_level][current_menu] == "DEACTIVATE BUFF":
                log_quest('buff_off', -1)
+               menu_level = 'top'
+               current_menu = 0 
+          elif menu_tree[menu_level][current_menu] == "OVERVIEW":
+               current_feature = 'chart_single'
+               menu_level = 'top'
+               current_menu = 0 
+          elif menu_tree[menu_level][current_menu] == "ATTRIBUTES":
+               current_feature = 'chart_multi'
                menu_level = 'top'
                current_menu = 0 
           elif menu_tree[menu_level][current_menu] == "LOG QUEST":

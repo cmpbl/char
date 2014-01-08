@@ -8,6 +8,8 @@ import sys
 import random
 import datetime
 
+#testing merge
+
 locale.setlocale(locale.LC_ALL, '')
 
 def refresh_main_interface():

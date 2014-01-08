@@ -30,6 +30,26 @@ def refresh_main_interface():
      box_menu.box()
      box_menu.refresh()
 
+def arbitrary_sql():
+     screen.clear()
+     box_feature.clear()
+
+     refresh_main_interface()
+
+     box_feature.box()
+     box_feature.addstr(2,2,"Enter SQL command:")
+
+     input = box_feature.getstr(10,10,60)
+
+     try:
+          con = sqlite3.connect('char.db')
+          cur = con.cursor()
+
+          cur.execute(input)
+          con.commit()
+     except:
+          screen.addstr(origin_error[1], origin_error[0], "--Error executing arbitrary SQL--")
+
 def get_param(prompt_string):
      screen.clear()
      screen.border(0)
@@ -769,7 +789,7 @@ attributes = {'INT': [], 'VIT': [], 'STR': [], 'WIS': [], 'WLL': [], 'DEX': [], 
 attributes_o = ['INT', 'VIT', 'STR', 'WIS', 'WLL', 'DEX', 'CHA'] #ORDERED
 attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS':'WISDOM', 'WLL':'WILLPOWER', 'DEX':'DEXTERITY', 'CHA':'CHARISMA'} #LONG NAME
 buff_list = {}
-menu_tree = {'top':["QUESTS", "BUFFS", "VIEWS", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "MAIN MENU"], 'views':["OVERVIEW", "LIST BUFFS", "ATTRIBUTES"]}
+menu_tree = {'top':["QUESTS", "BUFFS", "VIEWS", "SQL", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "MAIN MENU"], 'views':["OVERVIEW", "LIST BUFFS", "ATTRIBUTES"]}
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
 
 #LAYOUT VARS [x, y] notation which is reversed [row, col]
@@ -894,6 +914,10 @@ while run == 1:
                current_feature = 'chart_multi'
                menu_level = 'top'
                current_menu = 0 
+          elif menu_tree[menu_level][current_menu] == "SQL":
+               arbitrary_sql()
+               menu_level = 'top'
+               current_menu = 0  
           elif menu_tree[menu_level][current_menu] == "LOG QUEST":
                log_quest('quest', -1)
                menu_level = 'top'

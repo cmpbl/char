@@ -299,15 +299,15 @@ def feature_list_buffs():
                     q_row = cur.fetchone()
 
                     if q_row:
-                         buff_cmd = "box_feature.addstr(6+i*5,5, "+q_row[4]+".encode('utf-8'))"
+                         buff_cmd = "box_feature.addstr(1+i*5,5, "+q_row[4]+".encode('utf-8'))"
                          exec buff_cmd
-                         box_feature.addstr(6+i*5, 7, q_row[0])
+                         box_feature.addstr(1+i*5, 7, q_row[0], curses.A_BOLD)
                          for j in range (0, 7):
-                             box_feature.addstr(6+i*5+2, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
+                             box_feature.addstr(1+i*5+2, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
 
                     i+=1
 
-          box_feature.addstr(6+i*5,4, "DEBUFFS", curses.A_BOLD)
+          box_feature.addstr(3+i*5,4, "DEBUFFS", curses.A_BOLD)
 
           for k,v in buff_list.items():
                if int(v[0]) == 1:
@@ -319,11 +319,11 @@ def feature_list_buffs():
                     q_row = cur.fetchone()
 
                     if q_row:
-                         buff_cmd = "box_feature.addstr(4+i*5-1,5, "+q_row[4]+".encode('utf-8'))"
+                         buff_cmd = "box_feature.addstr(5+i*5,5, "+q_row[4]+".encode('utf-8'))"
                          exec buff_cmd
-                         box_feature.addstr(4+i*5-1, 7, q_row[0])
+                         box_feature.addstr(5+i*5, 7, q_row[0], curses.A_BOLD)
                          for j in range (0, 7):
-                             box_feature.addstr(4+i*5+1, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
+                             box_feature.addstr(5+i*5+2, 7+j*8, attributes_o[j] + "(" + str(q_row[6+j]) + ")")
                              
                     i+=1
 

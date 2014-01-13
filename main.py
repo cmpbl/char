@@ -8,8 +8,6 @@ import sys
 import random
 import datetime
 
-#testing merge
-
 locale.setlocale(locale.LC_ALL, '')
 
 def refresh_main_interface():
@@ -29,6 +27,8 @@ def refresh_main_interface():
      display_menu()
      box_menu.box()
      box_menu.refresh()
+
+     screen.addstr(0,0,'')
 
 def arbitrary_sql():
      screen.clear()
@@ -616,14 +616,17 @@ def log_quest(quest_type, rowid):
 
                     i = 0
                     for c_row in c_rows:
-                         if quest_type == 'buff':
+                         if quest_type != 'quest':
                               buff_cmd = "box_feature.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
-                         elif quest_type == 'buff_off':
-                              buff_cmd = "box_feature.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
-                         elif quest_type == 'quest':
+                         else :
                               buff_cmd = "pass"
                          exec buff_cmd
-                         box_feature.addstr(4+i*2, 6, c_row[1])
+
+                         if quest_type == 'quest' and c_row[4] == 'persistent':
+                              box_feature.addstr(4+i*2, 6, (c_row[1] + ' ' + u'\u221E').encode('utf-8'))
+                         else:
+                              box_feature.addstr(4+i*2, 6, c_row[1])
+
                          i+=1
 
                     box_feature.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))

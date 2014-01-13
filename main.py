@@ -244,7 +244,7 @@ def load_db():
           if CLEAN_START:
                cur.execute("DROP TABLE IF EXISTS quests")
                cur.execute("DROP TABLE IF EXISTS completes")
-          cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, icon TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT)")
+          cur.execute("CREATE TABLE quests(name TEXT, date_created TEXT, style TEXT, status TEXT, icon TEXT, description BLOB, cha_val INT, dex_val INT, int_val INT, str_val INT, vit_val INT, wis_val INT, wll_val INT, category TEXT)")
           cur.execute("CREATE TABLE completes(quest_id INT, date_completed TEXT, buff_bool TEXT)")
 
           if ADD_TEST_DATA:
@@ -409,6 +409,35 @@ def add_quest(quest_type):
           elif len(name_str)>0:
                attempt = 0
 
+     attempt = 1
+     menu_step = 0
+     while attempt == 1:
+          screen.clear()
+          box_feature.clear()
+          box_feature.box()
+          box_feature.addstr(2, 2, "Choose a category.")
+          i = 0
+          for category in category_list:
+               box_feature.addstr(4+i*2,4, category)
+               i+=1
+          box_feature.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
+
+          screen.addstr(1, 1, '')
+
+          refresh_main_interface()
+
+          box_feature.refresh()
+
+          cmd = screen.getch()
+
+          if cmd == curses.KEY_DOWN and menu_step < len(category_list)-1:
+               menu_step+=1
+          elif cmd == curses.KEY_UP and menu_step > 0:
+               menu_step-=1
+          elif cmd == ord('\n'):
+               category_str = category_list[menu_step]
+               attempt = 0
+
      if quest_type == 'quest':
           attempt = 1
           menu_step = 0
@@ -510,11 +539,11 @@ def add_quest(quest_type):
           cur = con.cursor()
 
           query = """INSERT INTO quests
-               (name, date_created, style, status, icon, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val)
+               (name, date_created, style, status, icon, description, cha_val, dex_val, int_val, str_val, vit_val, wis_val, wll_val, category)
                VALUES
-               (?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
+               (?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?,?)
                """
-          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,icon_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6]]
+          data =  [name_str, datetime.datetime.today().date().isoformat(),style_str,status_str,icon_str,'',val_array[0], val_array[1], val_array[2], val_array[3], val_array[4], val_array[5], val_array[6], category_str]
           cur.execute(query, data)       
           con.commit()  
           if quest_type == 'buff':
@@ -551,7 +580,7 @@ def log_quest(quest_type, rowid):
           cur = con.cursor()
           if not is_test_data:
                if quest_type == 'buff':
-                    query = """SELECT c_sub.quest_id, q.name, q.icon
+                    query = """SELECT c_sub.quest_id, q.name, q.icon, q.category
                          from quests q
                          inner join (
                               select c1.* from completes c1
@@ -561,12 +590,15 @@ def log_quest(quest_type, rowid):
                                    where c2.quest_id = c1.quest_id
                                    and c2.buff_bool = 1
                                    and c2.date_completed >= c1.date_completed)) c_sub
-                         on q.rowid = c_sub.quest_id;
+                         on q.rowid = c_sub.quest_id
+                         ORDER BY q.category, q.name;
                          """
+                    cat_index = 3
                elif quest_type == 'quest':
-                    query = """SELECT rowid, * FROM quests WHERE style = 'decay' ORDER BY name"""
+                    query = """SELECT rowid, * FROM quests WHERE style = 'decay' ORDER BY category, name;"""
+                    cat_index = 14
                elif quest_type == 'buff_off':
-                    query = """SELECT c_sub.quest_id, q.name, q.icon
+                    query = """SELECT c_sub.quest_id, q.name, q.icon, q.category
                          from quests q
                          inner join (
                               select c1.* from completes c1
@@ -576,8 +608,10 @@ def log_quest(quest_type, rowid):
                                    where c2.quest_id = c1.quest_id
                                    and c2.buff_bool = 0
                                    and c2.date_completed >= c1.date_completed)) c_sub
-                         on q.rowid = c_sub.quest_id;
+                         on q.rowid = c_sub.quest_id
+                         ORDER BY q.category, q.name;
                          """
+                    cat_index = 3
                cur.execute(query)
                con.commit()
 
@@ -601,6 +635,7 @@ def log_quest(quest_type, rowid):
 
                attempt = 1
                menu_step = 0
+               category_list = []
                while attempt == 1:
                     screen.clear()
 
@@ -615,21 +650,33 @@ def log_quest(quest_type, rowid):
                     screen.refresh()
 
                     i = 0
+                    max_menu_step_mod = 0
+                    current_cat = 'empty'
                     for c_row in c_rows:
+                         if c_row[cat_index] != current_cat:
+                              current_cat = c_row[cat_index]
+                              box_feature.addstr(4+i*2,4, current_cat, curses.A_BOLD)
+                              category_list.append(i)
+                              max_menu_step_mod += 1
+                              i+=1
                          if quest_type != 'quest':
-                              buff_cmd = "box_feature.addstr(4+i*2,4, "+c_row[2]+".encode('utf-8'))"
+                              buff_cmd = "box_feature.addstr(4+i*2,6, "+c_row[2]+".encode('utf-8'))"
                          else :
                               buff_cmd = "pass"
                          exec buff_cmd
 
                          if quest_type == 'quest' and c_row[4] == 'persistent':
-                              box_feature.addstr(4+i*2, 6, (c_row[1] + ' ' + u'\u221E').encode('utf-8'))
+                              box_feature.addstr(4+i*2, 8, (c_row[1] + ' ' + u'\u221E').encode('utf-8'))
                          else:
-                              box_feature.addstr(4+i*2, 6, c_row[1])
+                              box_feature.addstr(4+i*2, 8, c_row[1])
 
                          i+=1
 
-                    box_feature.addstr(4+menu_step%8*2, 2+(menu_step/8)*10, u'\u25BA'.encode('utf-8'))
+                    for pos in category_list:
+                         if pos == menu_step:
+                              menu_step += 1
+
+                    box_feature.addstr(4+menu_step*2, 6, u'\u25BA'.encode('utf-8'))
                     box_feature.addstr(1, 1, '')
 
                     refresh_main_interface()
@@ -640,10 +687,17 @@ def log_quest(quest_type, rowid):
 
                     cmd = screen.getch()
 
-                    if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1:
+                    if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1+max_menu_step_mod:
                          menu_step+=1
+                         for pos in category_list:
+                              if pos == menu_step:
+                                   menu_step += 1
                     elif cmd == curses.KEY_UP and menu_step > 0:
                          menu_step-=1
+                         for pos in category_list:
+                              if pos == menu_step:
+                                   menu_step -= 1
+                         if menu_step < 0: menu_step = 0
                     elif cmd == ord('\n'):
                          if quest_type == 'buff_off' and 1: #CHANGE TO CATCH NO OPTION INSTANCES
                               return
@@ -794,6 +848,7 @@ attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS'
 buff_list = {}
 menu_tree = {'top':["QUESTS", "BUFFS", "VIEWS", "SQL", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "MAIN MENU"], 'views':["OVERVIEW", "LIST BUFFS", "ATTRIBUTES"]}
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
+category_list = ["Health","People","Culture","Exploration"]
 
 #LAYOUT VARS [x, y] notation which is reversed [row, col]
 origin_attr = [5, 47]

@@ -33,19 +33,32 @@ def refresh_main_interface():
 def arbitrary_sql():
      screen.clear()
      box_feature.clear()
-
      refresh_main_interface()
 
-     box_feature.box()
-     box_feature.addstr(2,2,"Enter SQL command:")
+     build_str = ''
 
-     input = box_feature.getstr(10,10,60)
+     attempt = 1
+     while attempt == 1:
+          box_feature.clear()
+          box_feature.box()
+          box_feature.addstr(2,2,"Enter SQL command:")
+          box_feature.addstr(4,4,build_str)
+          box_feature.refresh()
+
+          cmd = box_feature.getch()
+
+          if cmd == ord('\n'):
+               attempt = 0
+          elif cmd == 127 or cmd == ord('\b'):
+               build_str = build_str[:len(build_str)-1]
+          else:
+               build_str = build_str + chr(cmd)
 
      try:
           con = sqlite3.connect('char.db')
           cur = con.cursor()
 
-          cur.execute(input)
+          cur.execute(build_str)
           con.commit()
      except:
           screen.addstr(origin_error[1], origin_error[0], "--Error executing arbitrary SQL--")
@@ -373,17 +386,31 @@ def add_quest(quest_type):
 
      attempt = 1
      while attempt == 1:
-          screen.clear()
-          box_feature.clear()
-          if quest_type == 'quest':
-               box_feature.addstr(2, 2, "What is the quest?")
-          else:
-               box_feature.addstr(2,2, "What is this buff or debuff?")
-          
-          refresh_main_interface()
-          box_feature.box()
-          box_feature.refresh()
-          name_str = box_feature.getstr(10, 10, 60)
+          build_str = ''
+          attempt2 = 1
+          while attempt2:
+               screen.clear()
+               box_feature.clear()
+               if quest_type == 'quest':
+                    box_feature.addstr(2, 2, "What is the quest?")
+               else:
+                    box_feature.addstr(2,2, "What is this buff or debuff?")
+               
+               refresh_main_interface()
+               box_feature.box()
+               box_feature.addstr(4,4,build_str)
+               box_feature.refresh()
+
+               cmd = box_feature.getch()
+
+               if cmd == ord('\n'):
+                    attempt2 = 0
+               elif cmd == 127 or cmd == ord('\b'):
+                    build_str = build_str[:len(build_str)-1]
+               else:
+                    build_str = build_str + chr(cmd)
+
+          name_str = build_str
 
           try:
                con = sqlite3.connect('char.db')
@@ -595,7 +622,7 @@ def log_quest(quest_type, rowid):
                          """
                     cat_index = 3
                elif quest_type == 'quest':
-                    query = """SELECT rowid, * FROM quests WHERE style = 'decay' ORDER BY category, name;"""
+                    query = """SELECT rowid, * FROM quests WHERE style = 'decay' and status <> 'closed' ORDER BY category, name;"""
                     cat_index = 14
                elif quest_type == 'buff_off':
                     query = """SELECT c_sub.quest_id, q.name, q.icon, q.category
@@ -636,6 +663,7 @@ def log_quest(quest_type, rowid):
                attempt = 1
                menu_step = 0
                category_list = []
+               menu_step_mod = 0
                while attempt == 1:
                     screen.clear()
 
@@ -650,33 +678,36 @@ def log_quest(quest_type, rowid):
                     screen.refresh()
 
                     i = 0
-                    max_menu_step_mod = 0
+                    
                     current_cat = 'empty'
                     for c_row in c_rows:
                          if c_row[cat_index] != current_cat:
                               current_cat = c_row[cat_index]
                               box_feature.addstr(4+i*2,4, current_cat, curses.A_BOLD)
                               category_list.append(i)
-                              max_menu_step_mod += 1
                               i+=1
                          if quest_type != 'quest':
-                              buff_cmd = "box_feature.addstr(4+i*2,6, "+c_row[2]+".encode('utf-8'))"
+                              buff_cmd = "box_feature.addstr(4+i*2,8, "+c_row[2]+".encode('utf-8'))"
                          else :
                               buff_cmd = "pass"
                          exec buff_cmd
 
                          if quest_type == 'quest' and c_row[4] == 'persistent':
                               box_feature.addstr(4+i*2, 8, (c_row[1] + ' ' + u'\u221E').encode('utf-8'))
-                         else:
+                         elif quest_type == 'quest':
                               box_feature.addstr(4+i*2, 8, c_row[1])
+                         else:
+                              box_feature.addstr(4+i*2, 10, c_row[1])
 
                          i+=1
 
                     for pos in category_list:
-                         if pos == menu_step:
-                              menu_step += 1
+                         if pos == menu_step+menu_step_mod:
+                              menu_step_mod += 1
 
-                    box_feature.addstr(4+menu_step*2, 6, u'\u25BA'.encode('utf-8'))
+                    box_feature.addstr(1,1,str(menu_step)+'    '+str(menu_step_mod))
+
+                    box_feature.addstr(4+(menu_step+menu_step_mod)*2, 6, u'\u25BA'.encode('utf-8'))
                     box_feature.addstr(1, 1, '')
 
                     refresh_main_interface()
@@ -687,16 +718,16 @@ def log_quest(quest_type, rowid):
 
                     cmd = screen.getch()
 
-                    if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1+max_menu_step_mod:
+                    if cmd == curses.KEY_DOWN and menu_step < len(c_rows)-1:
                          menu_step+=1
                          for pos in category_list:
-                              if pos == menu_step:
-                                   menu_step += 1
+                              if pos == menu_step+menu_step_mod:
+                                   menu_step_mod += 1
                     elif cmd == curses.KEY_UP and menu_step > 0:
                          menu_step-=1
                          for pos in category_list:
-                              if pos == menu_step:
-                                   menu_step -= 1
+                              if pos == menu_step+menu_step_mod:
+                                   menu_step_mod -= 1
                          if menu_step < 0: menu_step = 0
                     elif cmd == ord('\n'):
                          if quest_type == 'buff_off' and 1: #CHANGE TO CATCH NO OPTION INSTANCES

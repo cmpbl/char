@@ -879,7 +879,7 @@ attributes_l = {'INT': 'INTELLIGENCE', 'VIT':'VITALITY', 'STR':'STRENGTH', 'WIS'
 buff_list = {}
 menu_tree = {'top':["QUESTS", "BUFFS", "VIEWS", "SQL", "EXIT"], 'quests':["LOG QUEST", "ADD QUEST", "MAIN MENU"], 'buffs':["ACTIVATE BUFF", "DEACTIVATE BUFF", "ADD BUFF", "MAIN MENU"], 'views':["OVERVIEW", "LIST BUFFS", "ATTRIBUTES"]}
 icon_list = ["u'\u263A'","u'\u263C'","u'\u2642'","u'\u2665'","u'\u2666'","u'\u266B'", "u'\u2707'","u'\u221E'", "u'\u2126'", "u'\u2302'", "u'\u273F'", "u'\u2709'","u'\u2602'", "u'\u262F'", "u'\u2605'", "u'\u265E'", "u'\u224B'", "u'\u2646'", "u'\u260E'","u'\u265A'","u'\u00BB'","u'\uFF04'","u'\u2622'","u'\u27B3'"]
-category_list = ["Health","People","Culture","Exploration"]
+category_list = ["Health","People","Learning","Exploration","Misc"]
 
 #LAYOUT VARS [x, y] notation which is reversed [row, col]
 origin_attr = [5, 47]

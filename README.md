@@ -3,7 +3,7 @@
 
 `char` is an RPG for life that tracks goals for everyday living, and allows you gauge your performance over time.
 
-##Primary Menu
+## Primary Menu
 
 **QUESTS** are either one-time or repeatable goals. Achieving a goal will be credit any of several attributes with a time-decaying change (a goal's impact to attributes can be either positive or negative). An example of a repeatable quest is to meditate each day.
 
